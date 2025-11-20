@@ -79,7 +79,7 @@ export const metadata = {
       { url: "/icons/icon-180x180.png", sizes: "180x180", type: "image/png" },
     ],
   },
-  manifest: "/manifest",
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({ children }) {
