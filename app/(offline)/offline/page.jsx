@@ -1,9 +1,14 @@
-export const metadata = {
-  title: "Offline - Atunluto Group",
-  description: "You are currently offline",
-};
+"use client";
 
 export default function OfflinePage() {
+  const handleTryAgain = () => {
+    window.location.reload();
+  };
+
+  const handleGoBack = () => {
+    window.history.back();
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="text-center max-w-md">
@@ -29,20 +34,20 @@ export default function OfflinePage() {
         </h1>
 
         <p className="text-lg font-poppins text-text-gray mb-8">
-          It looks like you&lsquo;ve lost your internet connection. Some content
-          may not be available until you&lsquo;re back online.
+          It looks like you&apos;ve lost your internet connection. Some content
+          may not be available until you&apos;re back online.
         </p>
 
         <div className="space-y-4">
           <button
-            onClick={() => window.location.reload()}
+            onClick={handleTryAgain}
             className="w-full bg-primary-green text-white font-poppins font-semibold py-3 px-6 rounded-lg hover:bg-secondary-green transition-colors duration-200"
           >
             Try Again
           </button>
 
           <button
-            onClick={() => window.history.back()}
+            onClick={handleGoBack}
             className="w-full bg-white text-primary-green border-2 border-primary-green font-poppins font-semibold py-3 px-6 rounded-lg hover:bg-light-green transition-colors duration-200"
           >
             Go Back
