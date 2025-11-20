@@ -1,0 +1,15 @@
+# Atunluto Group - Robots.txt
+# Allow all crawlers
+
+User-agent: *
+Allow: /
+
+# Disallow admin areas
+Disallow: /admin/
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://www.atunlutogroup.org/sitemap.xml
+
+# Crawl delay (optional - be nice to servers)
+Crawl-delay: 1
