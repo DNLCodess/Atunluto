@@ -109,12 +109,10 @@ export default function InstallPrompt() {
     const { outcome } = await deferredPrompt.userChoice;
 
     if (outcome === "accepted") {
-      console.log("✅ User accepted the install prompt");
       setShowPrompt(false);
       localStorage.removeItem("installPromptDismissed");
       localStorage.removeItem("installPromptDismissCount");
     } else {
-      console.log("❌ User dismissed the install prompt");
       handleDismiss();
     }
 
@@ -214,7 +212,7 @@ export default function InstallPrompt() {
 
       {/* iOS Install Instructions Modal */}
       {showIOSModal && (
-        <div className="fixed inset-0 z-60 flex items-end md:items-center justify-center bg-black bg-opacity-50 p-4 animate-fade-in">
+        <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black bg-opacity-50 p-4 animate-fade-in">
           <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-xl max-w-md w-full p-6 animate-slide-up">
             <div className="flex justify-between items-start mb-4">
               <h3 className="text-xl font-montserrat font-extrabold text-text-dark">
@@ -270,7 +268,7 @@ export default function InstallPrompt() {
                   </span>
                   <span>
                     Scroll down and tap{" "}
-                    <strong>&quot;Add to Home Screen&ldquo;</strong>
+                    <strong>&quot;Add to Home Screen&quot;</strong>
                   </span>
                 </li>
 
@@ -279,8 +277,7 @@ export default function InstallPrompt() {
                     3
                   </span>
                   <span>
-                    Tap <strong>&ldquo;Add&quot;</strong> in the top right
-                    corner
+                    Tap <strong>&quot;Add&quot;</strong> in the top right corner
                   </span>
                 </li>
               </ol>
