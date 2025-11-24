@@ -2,6 +2,8 @@ import { Montserrat, Poppins } from "next/font/google";
 import "../globals.css";
 import ServiceWorkerRegistration from "@/components/common/service-worker-registration";
 import InstallPrompt from "@/components/common/installPrompt";
+import Navbar from "@/components/common/navbar";
+import Footer from "@/components/common/footer";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -92,6 +94,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Atunluto" />
         <link rel="apple-touch-icon" href="/icons/icon-152x152.png" />
+        <link rel="site.webmanifest" href="/site.webmanifest" />
         <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
       </head>
       <body
@@ -99,7 +102,9 @@ export default function RootLayout({ children }) {
       >
         <ServiceWorkerRegistration />
         <InstallPrompt />
+        <Navbar />
         {children}
+        <Footer />
       </body>
     </html>
   );
