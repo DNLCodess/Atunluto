@@ -12,8 +12,7 @@ export default function Navbar() {
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "About Us", href: "/about" },
-    { name: "Mission", href: "/mission" },
-    { name: "Vision", href: "/vision" },
+    { name: "Mission", href: "/mission-vision" },
     { name: "Manifesto", href: "/manifesto" },
     { name: "Gallery", href: "/gallery" },
     { name: "Join Us", href: "/join" },
