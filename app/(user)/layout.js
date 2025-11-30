@@ -84,9 +84,9 @@ export const metadata = {
   manifest: "/site.webmanifest",
 };
 
-export default function RootLayout({ children }) {
+export default function UserLayout({ children }) {
   return (
-    <html lang="en-NG">
+    <html>
       <head>
         <meta name="theme-color" content="#1B5E20" />
         <meta name="mobile-web-app-capable" content="yes" />

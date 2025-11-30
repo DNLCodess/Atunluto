@@ -1,8 +1,8 @@
 // Service Worker for Atunluto Group PWA
-const CACHE_NAME = "atunluto-v1";
+const CACHE_NAME = "atunluto-v2";
 const OFFLINE_URL = "/offline";
 
-// Files to cache on install
+// Files to cache on install (REMOVED /admin routes)
 const STATIC_CACHE_URLS = [
   "/",
   "/offline",
@@ -62,14 +62,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Skip API calls and Supabase requests from caching
-  if (
-    event.request.url.includes("/api/") ||
-    event.request.url.includes("supabase")
-  ) {
+  // ✅ CRITICAL: Skip caching for these routes
+  const url = new URL(event.request.url);
+  const shouldSkipCache =
+    url.pathname.startsWith("/admin") || // All admin pages
+    url.pathname.startsWith("/login") || // Login page
+    url.pathname.includes("/api/") || // API routes
+    url.pathname.includes("supabase") || // Supabase requests
+    event.request.method !== "GET"; // Non-GET requests
+
+  if (shouldSkipCache) {
+    // Always fetch fresh from network for these routes
+    event.respondWith(fetch(event.request));
     return;
   }
 
+  // For public pages, use cache-first strategy
   event.respondWith(
     (async () => {
       try {
@@ -90,8 +98,12 @@ self.addEventListener("fetch", (event) => {
         );
         const networkResponse = await fetch(event.request);
 
-        // Cache the new response for next time
-        if (networkResponse && networkResponse.status === 200) {
+        // Cache the new response ONLY for static public pages
+        if (
+          networkResponse &&
+          networkResponse.status === 200 &&
+          event.request.method === "GET"
+        ) {
           const cache = await caches.open(CACHE_NAME);
           cache.put(event.request, networkResponse.clone());
         }

@@ -12,6 +12,7 @@ import {
   HiOutlineHeart,
   HiArrowRight,
 } from "react-icons/hi";
+import Hero from "@/components/shared/mission/hero";
 
 // Animation variants
 const fadeInUp = {
@@ -523,7 +524,7 @@ function CallToAction() {
 export default function MissionVisionPage() {
   return (
     <>
-      <MissionVisionHero />
+      <Hero />
       <MissionSection />
       <VisionSection />
       <CoreValues />

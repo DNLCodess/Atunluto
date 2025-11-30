@@ -26,7 +26,7 @@ export default function CTA() {
   return (
     <section
       ref={ref}
-      className="relative overflow-hidden bg-gradient-to-br from-primary via-secondary to-accent py-16 md:py-24"
+      className="relative overflow-hidden bg-gradient-to-br from-primary-green via-secondary-green to-accent-green py-16 md:py-24"
       id="register"
     >
       {/* Background Pattern */}
@@ -102,11 +102,11 @@ export default function CTA() {
             className="flex items-center"
           >
             <div className="w-full rounded-2xl border border-white/20 bg-white p-8 shadow-2xl md:p-10">
-              <div className="mb-6 inline-flex rounded-full bg-primary/10 p-3">
-                <Users className="h-8 w-8 text-primary" />
+              <div className="mb-6 inline-flex rounded-full bg-primary-green/10 p-3">
+                <Users className="h-8 w-8 text-primary-green" />
               </div>
 
-              <h3 className="font-montserrat text-2xl font-extrabold text-gray-900 md:text-3xl">
+              <h3 className="font-family-sans text-2xl font-extrabold text-gray-900 md:text-3xl">
                 Become a Change Maker
               </h3>
               <p className="mt-3 font-poppins text-base text-gray-600">
@@ -122,19 +122,19 @@ export default function CTA() {
                   </label>
                   <ul className="mt-2 space-y-2 font-poppins text-sm text-gray-600">
                     <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
                       Full name and contact information
                     </li>
                     <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
                       Home address in Oyo South
                     </li>
                     <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
                       LGA, Ward, and Polling Unit details
                     </li>
                     <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
                       WhatsApp and Messenger contacts
                     </li>
                   </ul>
@@ -146,7 +146,7 @@ export default function CTA() {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary py-4 font-poppins text-base font-bold text-white shadow-lg transition-all hover:shadow-xl"
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-green to-secondary-green py-4 font-poppins text-base font-bold text-white shadow-lg transition-all hover:shadow-xl"
                     >
                       Join Now
                       <ArrowRight className="h-5 w-5" />
@@ -157,7 +157,7 @@ export default function CTA() {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className="w-full rounded-full border-2 border-gray-300 bg-white py-4 font-poppins text-base font-bold text-gray-700 transition-all hover:border-primary hover:text-primary"
+                      className="w-full rounded-full border-2 border-gray-300 bg-white py-4 font-poppins text-base font-bold text-gray-700 transition-all hover:border-primary-green hover:text-primary-green"
                     >
                       Learn More First
                     </motion.button>

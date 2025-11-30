@@ -13,9 +13,8 @@ export default function Navbar() {
     { name: "Home", href: "/" },
     { name: "About Us", href: "/about" },
     { name: "Mission", href: "/mission-vision" },
-    { name: "Manifesto", href: "/manifesto" },
+    { name: "Manifesto", href: "/manifestoes" },
     { name: "Gallery", href: "/gallery" },
-    { name: "Join Us", href: "/join" },
   ];
 
   return (
@@ -59,7 +58,7 @@ export default function Navbar() {
           {/* Desktop CTA */}
           <div className="hidden md:block">
             <Link
-              href="/join"
+              href="/join-us"
               className="px-5 py-2 bg-green-700 text-white font-semibold rounded-full hover:bg-green-600 transition-all"
             >
               Join Us
@@ -125,7 +124,7 @@ export default function Navbar() {
 
               <div className="pt-8">
                 <Link
-                  href="/join"
+                  href="/join-us"
                   onClick={() => setOpen(false)}
                   className="block text-center px-5 py-3 bg-green-700 text-white rounded-full font-semibold"
                 >

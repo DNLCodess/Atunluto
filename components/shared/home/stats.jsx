@@ -2,40 +2,32 @@
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
-import { Users, MapPin, Calendar, TrendingUp } from "lucide-react";
+import Link from "next/link";
 
 const stats = [
   {
-    icon: Users,
     value: 800,
     suffix: "+",
-    label: "Change Makers",
-    description: "Active members committed to transformation",
-    color: "#4CAF50",
+    label: "Members",
+    description: "Committed to grassroots transformation",
   },
   {
-    icon: MapPin,
     value: 5,
-    suffix: " LGAs",
-    label: "Active Presence",
-    description: "Growing across Oyo South District",
-    color: "#2E7D32",
+    suffix: "",
+    label: "LGAs",
+    description: "Active presence across Oyo South",
   },
   {
-    icon: TrendingUp,
     value: 100,
     suffix: "+",
-    label: "Businesses Supported",
-    description: "Through our interest-free loan scheme",
-    color: "#1B5E20",
+    label: "Businesses",
+    description: "Supported with interest-free loans",
   },
   {
-    icon: Calendar,
-    value: 2024,
-    suffix: "",
-    label: "Founded",
-    description: "March 1st, building momentum daily",
-    color: "#66BB6A",
+    value: 50,
+    suffix: "+",
+    label: "Students",
+    description: "WAEC fees paid and schools supported",
   },
 ];
 
@@ -76,108 +68,99 @@ export default function Stats() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
-  const fadeInUp = {
-    hidden: { opacity: 0, y: 30 },
-    visible: { opacity: 1, y: 0 },
-  };
-
   return (
-    <section ref={ref} className="bg-white py-16 md:py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
+    <section
+      ref={ref}
+      className="py-20 md:py-32"
+      style={{ backgroundColor: "#1b5e20" }}
+    >
+      <div className="mx-auto max-w-6xl px-6 sm:px-8 lg:px-12">
+        {/* Header */}
         <motion.div
-          initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
-          variants={fadeInUp}
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
           transition={{ duration: 0.6 }}
-          className="mx-auto max-w-3xl text-center"
+          className="mb-16 text-center"
         >
-          <h2 className="font-montserrat text-3xl font-extrabold text-primary sm:text-4xl md:text-5xl">
-            Our Growing Impact
+          <h2
+            className="font-montserrat text-4xl font-bold mb-4 md:text-5xl"
+            style={{ color: "#ffffff" }}
+          >
+            Our Impact in Numbers
           </h2>
-          <p className="mt-4 font-poppins text-lg text-gray-600 md:text-xl">
-            Real numbers from our grassroots movement
+          <p
+            className="font-poppins text-lg max-w-2xl mx-auto"
+            style={{ color: "rgba(255, 255, 255, 0.8)" }}
+          >
+            Since March 2024, we have been building a movement for real change
           </p>
         </motion.div>
 
         {/* Stats Grid */}
-        <div className="mt-12 grid gap-6 md:mt-16 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid md:grid-cols-4 gap-8 mb-16">
           {stats.map((stat, index) => (
             <motion.div
               key={index}
-              initial="hidden"
-              animate={isInView ? "visible" : "hidden"}
-              variants={fadeInUp}
-              transition={{ duration: 0.6, delay: 0.1 + index * 0.1 }}
-              whileHover={{ y: -8 }}
-              className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-br from-white to-gray-50 p-6 shadow-sm transition-all hover:shadow-xl"
+              initial={{ opacity: 0, y: 30 }}
+              animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+              transition={{ duration: 0.6, delay: index * 0.1 }}
+              className="text-center"
             >
-              {/* Background Effect */}
+              {/* Value */}
               <div
-                className="absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-0 blur-3xl transition-opacity group-hover:opacity-100"
-                style={{ backgroundColor: `${stat.color}20` }}
-              />
-
-              {/* Content */}
-              <div className="relative">
-                {/* Icon */}
-                <div
-                  className="mb-4 inline-flex rounded-xl p-3 transition-transform group-hover:scale-110"
-                  style={{ backgroundColor: `${stat.color}15` }}
-                >
-                  <stat.icon
-                    className="h-6 w-6"
-                    style={{ color: stat.color }}
-                  />
-                </div>
-
-                {/* Value */}
-                <div className="font-montserrat text-4xl font-extrabold text-gray-900 md:text-5xl">
-                  <Counter value={stat.value} />
-                  {stat.suffix}
-                </div>
-
-                {/* Label */}
-                <div
-                  className="mt-2 font-montserrat text-sm font-bold uppercase tracking-wide"
-                  style={{ color: stat.color }}
-                >
-                  {stat.label}
-                </div>
-
-                {/* Description */}
-                <p className="mt-3 font-poppins text-sm text-gray-600">
-                  {stat.description}
-                </p>
+                className="font-montserrat text-5xl md:text-6xl font-bold mb-2"
+                style={{ color: "#4caf50" }}
+              >
+                <Counter value={stat.value} />
+                {stat.suffix}
               </div>
 
-              {/* Decorative Border */}
+              {/* Label */}
               <div
-                className="absolute bottom-0 left-0 h-1 w-0 transition-all duration-500 group-hover:w-full"
-                style={{ backgroundColor: stat.color }}
-              />
+                className="font-montserrat text-lg font-bold mb-2"
+                style={{ color: "#ffffff" }}
+              >
+                {stat.label}
+              </div>
+
+              {/* Description */}
+              <p
+                className="font-poppins text-sm"
+                style={{ color: "rgba(255, 255, 255, 0.7)" }}
+              >
+                {stat.description}
+              </p>
             </motion.div>
           ))}
         </div>
 
-        {/* Bottom CTA */}
+        {/* Bottom Section */}
         <motion.div
-          initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
-          variants={fadeInUp}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          className="mt-12 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="pt-12 text-center"
+          style={{ borderTop: "1px solid rgba(255, 255, 255, 0.2)" }}
         >
-          <p className="font-poppins text-lg text-gray-700 md:text-xl">
-            Want to be part of these numbers?
-          </p>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="mt-4 rounded-full bg-gradient-to-r from-primary to-secondary px-8 py-4 font-poppins text-base font-bold text-white shadow-lg transition-all hover:shadow-xl"
+          <p
+            className="font-poppins text-xl font-semibold mb-6"
+            style={{ color: "#ffffff" }}
           >
-            Join Atunluto Today
-          </motion.button>
+            Be part of the movement transforming Oyo South
+          </p>
+          <Link href="/join">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="font-poppins text-base font-semibold px-10 py-4 transition-all rounded-lg"
+              style={{
+                backgroundColor: "#ffffff",
+                color: "#1b5e20",
+              }}
+            >
+              Join Atunluto Group
+            </motion.button>
+          </Link>
         </motion.div>
       </div>
     </section>
