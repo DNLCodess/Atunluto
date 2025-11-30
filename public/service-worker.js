@@ -1,5 +1,5 @@
 // Service Worker for Atunluto Group PWA
-const CACHE_NAME = "atunluto-v2";
+const CACHE_NAME = "atunluto-v3";
 const OFFLINE_URL = "/offline";
 
 // Files to cache on install (REMOVED /admin routes)
