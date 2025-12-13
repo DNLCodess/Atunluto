@@ -159,15 +159,18 @@ export default function MembersPage() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          {(role === "admin" || role === "super_user") && (
+          {(role === "admin" ||
+            role === "super_user" ||
+            role === "registration") && (
             <Link
-              href="/admin/add-member"
+              href="/dashboard/add-member"
               className="inline-flex items-center gap-2 px-5 py-3 bg-green-700 hover:bg-green-800 text-white font-medium rounded-xl shadow-md hover:shadow-lg transition"
             >
               <Plus className="w-5 h-5" />
               Add Member
             </Link>
           )}
+
           <button
             onClick={exportToExcel}
             className="inline-flex items-center gap-2 px-5 py-3 bg-blue-700 hover:bg-blue-800 text-white font-medium rounded-xl shadow-md transition"
