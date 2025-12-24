@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import MemberRegistrationForm from "@/components/common/reg-form";
+import { Info } from "lucide-react";
 
 const slides = [
   {
@@ -194,6 +195,18 @@ export default function RegisterPage() {
               className="rounded-2xl p-8 md:p-10 shadow-lg"
               style={{ backgroundColor: "#ffffff" }}
             >
+              <p className="flex items-center flex-col md:flex-row  gap-2 font-poppins text-lg text-center font-bold text-green-600 py-2">
+                <Info className="w-5 h-5 text-green-600" />
+                You can find your ward from&nbsp;
+                <a
+                  href="https://www.inecnigeria.org/polling-units/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-green-700"
+                >
+                  INEC Polling Units Directory
+                </a>
+              </p>
               {/* Reusable Form Component */}
               <MemberRegistrationForm
                 onSuccess={handleSuccess}
