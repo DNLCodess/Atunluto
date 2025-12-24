@@ -26,7 +26,7 @@ const slides = [
     id: 3,
     image: "/hero3.jpg",
     title: "RESCUE OUR FUTURE",
-    subtitle: "Building A Better Tomorrow",
+    subtitle: "Our Motto: Iṣẹ Loogun iṣẹ",
     description:
       "800+ change makers across 5 LGAs working together for agriculture, healthcare, education, and more.",
   },

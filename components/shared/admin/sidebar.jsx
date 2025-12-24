@@ -65,15 +65,8 @@ export default function Sidebar() {
     }
 
     // Admin/Superuser gets everything
-    if (role === "superuser" || role === "administrator") {
-      return [
-        ...baseItems,
-        adminItems.reports,
-        adminItems.broadcast,
-        adminItems.settings,
-        adminItems.admins,
-        adminItems.gallery,
-      ];
+    if (role === "super_user" || role === "administrator") {
+      return [...baseItems, adminItems.gallery];
     }
 
     // Registration staff and others get base items only

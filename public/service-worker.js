@@ -11,7 +11,6 @@ const STATIC_CACHE_URLS = [
   "/manifestos",
   "/achievements",
   "/gallery",
-  "/join-us",
 ];
 
 // Install event - cache static assets
@@ -65,7 +64,7 @@ self.addEventListener("fetch", (event) => {
   // ✅ CRITICAL: Skip caching for these routes
   const url = new URL(event.request.url);
   const shouldSkipCache =
-    url.pathname.startsWith("/admin") || // All admin pages
+    url.pathname.startsWith("/dashboard") || // All admin pages
     url.pathname.startsWith("/login") || // Login page
     url.pathname.includes("/api/") || // API routes
     url.pathname.includes("supabase") || // Supabase requests

@@ -12,7 +12,7 @@ export default function AddMemberPage() {
   const { role } = useAuthStore();
 
   // Optional: Role guard (extra safety)
-  if (!["admin", "super_user"].includes(role)) {
+  if (!["admin", "super_user", "registration"].includes(role)) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

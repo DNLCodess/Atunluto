@@ -4,52 +4,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/supabase/client";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import Image from "next/image";
-import {
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Grid3x3,
-  Search,
-} from "lucide-react";
+import { Search, Grid3x3 } from "lucide-react";
+import FullscreenViewer from "@/components/shared/gallery/FullScreenViewer";
+import InfiniteRow from "@/components/shared/gallery/InfiniteRow";
 
 const supabase = createClient();
-
-// Optimized Bento patterns - mobile first
-const BENTO_PATTERNS = [
-  // Pattern 1: Large feature with grid
-  [
-    { span: "col-span-2 row-span-2" }, // Large featured
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-  ],
-  // Pattern 2: Vertical emphasis
-  [
-    { span: "col-span-1 row-span-2" }, // Tall
-    { span: "col-span-2 row-span-1" }, // Wide
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-  ],
-  // Pattern 3: Horizontal feature
-  [
-    { span: "col-span-3 row-span-1" }, // Extra wide
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-  ],
-  // Pattern 4: Balanced grid
-  [
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-1 row-span-1" },
-    { span: "col-span-2 row-span-1" }, // Wide
-    { span: "col-span-1 row-span-1" },
-  ],
-];
 
 export default function GalleryPage() {
   const [images, setImages] = useState([]);
@@ -58,10 +17,10 @@ export default function GalleryPage() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [imagesLoaded, setImagesLoaded] = useState(new Set());
 
   const shouldReduceMotion = useReducedMotion();
 
+  // Fetch gallery images
   const fetchGallery = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -79,7 +38,7 @@ export default function GalleryPage() {
     fetchGallery();
   }, [fetchGallery]);
 
-  // Filter images
+  // Filter images based on category and search
   const filteredImages = useMemo(() => {
     return images.filter((img) => {
       const matchesCategory =
@@ -98,30 +57,36 @@ export default function GalleryPage() {
     return ["all", ...Array.from(cats)];
   }, [images]);
 
-  // Group images into bento sections
-  const bentoSections = useMemo(() => {
-    const sections = [];
-    let currentIndex = 0;
+  // Split images into rows with exactly 6 images per row (no duplication)
+  const imageRows = useMemo(() => {
+    if (filteredImages.length === 0) return [];
 
-    while (currentIndex < filteredImages.length) {
-      const pattern = BENTO_PATTERNS[sections.length % BENTO_PATTERNS.length];
-      const sectionImages = filteredImages.slice(
-        currentIndex,
-        currentIndex + pattern.length
-      );
-      sections.push({ pattern, images: sectionImages });
-      currentIndex += pattern.length;
+    const rows = [];
+    const imagesPerRow = 6;
+
+    // Split images into chunks of 6
+    for (let i = 0; i < filteredImages.length; i += imagesPerRow) {
+      const row = filteredImages.slice(i, i + imagesPerRow);
+
+      // Only add rows that have at least 1 image
+      if (row.length > 0) {
+        rows.push(row);
+      }
     }
 
-    return sections;
+    return rows;
   }, [filteredImages]);
 
-  // Fullscreen navigation
-  const openFullscreen = useCallback((image, index) => {
-    setSelectedImage(image);
-    setSelectedIndex(index);
-    document.body.style.overflow = "hidden";
-  }, []);
+  // Handle image click for fullscreen
+  const openFullscreen = useCallback(
+    (image) => {
+      const index = filteredImages.findIndex((img) => img.id === image.id);
+      setSelectedImage(image);
+      setSelectedIndex(index);
+      document.body.style.overflow = "hidden";
+    },
+    [filteredImages]
+  );
 
   const closeFullscreen = useCallback(() => {
     setSelectedImage(null);
@@ -140,24 +105,6 @@ export default function GalleryPage() {
     [selectedIndex, filteredImages]
   );
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!selectedImage) return;
-      if (e.key === "Escape") closeFullscreen();
-      if (e.key === "ArrowRight") navigateImage("next");
-      if (e.key === "ArrowLeft") navigateImage("prev");
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedImage, closeFullscreen, navigateImage]);
-
-  // Handle image load
-  const handleImageLoad = useCallback((imageId) => {
-    setImagesLoaded((prev) => new Set([...prev, imageId]));
-  }, []);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex items-center justify-center">
@@ -166,7 +113,7 @@ export default function GalleryPage() {
           animate={{ opacity: 1 }}
           className="text-center"
         >
-          <div className="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-16 h-16 spinner mx-auto"></div>
           <p className="mt-4 text-gray-600 font-medium">Loading gallery...</p>
         </motion.div>
       </div>
@@ -195,7 +142,7 @@ export default function GalleryPage() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, duration: 0.6 }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 mb-6"
+              className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full mb-6"
             >
               <Grid3x3 className="w-4 h-4" />
               <span className="text-sm font-medium">Photo Gallery</span>
@@ -203,9 +150,7 @@ export default function GalleryPage() {
 
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
               Our Journey in{" "}
-              <span className="bg-gradient-to-r from-green-200 to-green-100 bg-clip-text text-transparent">
-                Pictures
-              </span>
+              <span className="gradient-text-green">Pictures</span>
             </h1>
 
             <p className="text-lg sm:text-xl text-green-100 leading-relaxed max-w-2xl mx-auto">
@@ -221,15 +166,15 @@ export default function GalleryPage() {
               className="mt-8 flex flex-wrap items-center justify-center gap-4 text-sm text-green-100"
             >
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-300 rounded-full"></div>
+                <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse-subtle"></div>
                 <span>{images.length} Photos</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-300 rounded-full"></div>
+                <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse-subtle"></div>
                 <span>{categories.length - 1} Categories</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-300 rounded-full"></div>
+                <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse-subtle"></div>
                 <span>Updated Regularly</span>
               </div>
             </motion.div>
@@ -253,34 +198,37 @@ export default function GalleryPage() {
       </section>
 
       {/* Filters Section */}
-      <section className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-gray-200 shadow-sm">
+      <section className="sticky top-0 z-30 bg-white/80 backdrop-blur-custom border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
             {/* Search */}
             <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search photos..."
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition text-sm"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-smooth text-sm"
+                aria-label="Search photos"
               />
             </div>
 
             {/* Category Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto scrollbar-hide">
               {categories.map((category) => (
                 <motion.button
                   key={category}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setCategoryFilter(category)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
+                  className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-smooth touch-target ${
                     categoryFilter === category
                       ? "bg-green-700 text-white shadow-lg shadow-green-700/30"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
+                  aria-label={`Filter by ${category}`}
+                  aria-pressed={categoryFilter === category}
                 >
                   {category === "all" ? "All" : category}
                 </motion.button>
@@ -290,265 +238,48 @@ export default function GalleryPage() {
         </div>
       </section>
 
-      {/* Gallery Bento Grid */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+      {/* Infinite Scrolling Gallery */}
+      <section className="py-12 sm:py-16 overflow-hidden no-overscroll md:pl-10">
         {filteredImages.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-center py-20"
+            className="text-center py-20 max-w-7xl mx-auto px-4"
           >
             <Grid3x3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
               No photos found
             </h3>
-            <p className="text-gray-600">Try adjusting your filters</p>
+            <p className="text-gray-600">
+              Try adjusting your filters or search terms
+            </p>
           </motion.div>
         ) : (
-          <div className="space-y-6">
-            {bentoSections.map((section, sectionIndex) => (
-              <motion.div
-                key={sectionIndex}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{
-                  duration: 0.6,
-                  delay: shouldReduceMotion ? 0 : sectionIndex * 0.1,
-                }}
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4"
-                style={{
-                  gridAutoRows: "minmax(200px, auto)",
-                }}
-              >
-                {section.images.map((image, imageIndex) => {
-                  const pattern =
-                    section.pattern[imageIndex] || section.pattern[0];
-                  const globalIndex =
-                    sectionIndex * section.pattern.length + imageIndex;
-
-                  return (
-                    <GalleryItem
-                      key={image.id}
-                      image={image}
-                      pattern={pattern}
-                      onClick={() => openFullscreen(image, globalIndex)}
-                      onLoad={() => handleImageLoad(image.id)}
-                      isLoaded={imagesLoaded.has(image.id)}
-                    />
-                  );
-                })}
-              </motion.div>
+          <div className="space-y-8">
+            {imageRows.map((row, index) => (
+              <InfiniteRow
+                key={index}
+                images={row}
+                rowIndex={index}
+                onImageClick={openFullscreen}
+              />
             ))}
           </div>
         )}
       </section>
 
-      {/* Fullscreen Lightbox */}
+      {/* Fullscreen Viewer */}
       <AnimatePresence>
         {selectedImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black"
-            onClick={closeFullscreen}
-          >
-            {/* Close Button */}
-            <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={closeFullscreen}
-              className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-full transition"
-            >
-              <X className="w-6 h-6" />
-            </motion.button>
-
-            {/* Navigation Buttons */}
-            {filteredImages.length > 1 && (
-              <>
-                <motion.button
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  whileHover={{ scale: 1.1, x: -5 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigateImage("prev");
-                  }}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-full transition"
-                >
-                  <ChevronLeft className="w-6 h-6" />
-                </motion.button>
-
-                <motion.button
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  whileHover={{ scale: 1.1, x: 5 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigateImage("next");
-                  }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-full transition"
-                >
-                  <ChevronRight className="w-6 h-6" />
-                </motion.button>
-              </>
-            )}
-
-            {/* Image Container */}
-            <div
-              className="absolute inset-0 flex items-center justify-center p-4 sm:p-12"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <motion.div
-                key={selectedImage.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.3 }}
-                className="relative w-full h-full"
-              >
-                {/* Protected Image with proper sizing */}
-                <div className="relative w-full h-full">
-                  <Image
-                    src={
-                      selectedImage.full_image_url || selectedImage.image_url
-                    }
-                    alt={selectedImage.title}
-                    fill
-                    className="object-contain select-none pointer-events-none"
-                    quality={95}
-                    priority
-                    sizes="100vw"
-                    draggable={false}
-                  />
-                  {/* Protection overlay */}
-                  <div
-                    className="absolute inset-0 bg-transparent cursor-default"
-                    onContextMenu={(e) => e.preventDefault()}
-                  />
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Image Info */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 sm:p-8 pointer-events-none"
-            >
-              <div className="max-w-4xl mx-auto">
-                <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">
-                  {selectedImage.title}
-                </h3>
-                {selectedImage.description && (
-                  <p className="text-gray-300 text-sm sm:text-base line-clamp-2">
-                    {selectedImage.description}
-                  </p>
-                )}
-                <div className="flex items-center gap-4 mt-4 text-sm text-gray-400">
-                  <span className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-lg">
-                    {selectedImage.category}
-                  </span>
-                  <span>
-                    {selectedIndex + 1} / {filteredImages.length}
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
+          <FullscreenViewer
+            image={selectedImage}
+            images={filteredImages}
+            currentIndex={selectedIndex}
+            onClose={closeFullscreen}
+            onNavigate={navigateImage}
+          />
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-// Gallery Item Component
-function GalleryItem({ image, pattern, onClick, onLoad, isLoaded }) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  return (
-    <motion.div
-      whileHover={{ scale: 1.02, zIndex: 10 }}
-      onHoverStart={() => setIsHovered(true)}
-      onHoverEnd={() => setIsHovered(false)}
-      className={`${pattern.span} relative overflow-hidden rounded-2xl bg-gray-100 cursor-pointer group shadow-md hover:shadow-2xl transition-all duration-300`}
-      style={{ minHeight: "200px" }}
-      onClick={onClick}
-    >
-      {/* Image with proper object-fit */}
-      <div className="absolute inset-0">
-        <Image
-          src={image.image_url}
-          alt={image.title}
-          fill
-          className={`transition-all duration-700 group-hover:scale-110 ${
-            isLoaded ? "opacity-100" : "opacity-0"
-          }`}
-          style={{ objectFit: "cover" }}
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
-          quality={75}
-          onLoad={onLoad}
-        />
-      </div>
-
-      {/* Loading skeleton */}
-      {!isLoaded && (
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 animate-pulse" />
-      )}
-
-      {/* Protection overlay */}
-      <div
-        className="absolute inset-0 bg-transparent select-none z-10"
-        onContextMenu={(e) => e.preventDefault()}
-        onDragStart={(e) => e.preventDefault()}
-      />
-
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20" />
-
-      {/* Content overlay */}
-      <motion.div
-        initial={false}
-        animate={{
-          opacity: isHovered ? 1 : 0,
-          y: isHovered ? 0 : 20,
-        }}
-        transition={{ duration: 0.2 }}
-        className="absolute inset-0 p-4 sm:p-6 flex flex-col justify-end text-white z-30"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-base sm:text-lg mb-1 line-clamp-2">
-              {image.title}
-            </h3>
-            {image.description && (
-              <p className="text-xs sm:text-sm text-gray-200 line-clamp-2">
-                {image.description}
-              </p>
-            )}
-            <span className="inline-block mt-2 px-2 py-1 bg-white/20 backdrop-blur-sm rounded-md text-xs font-medium">
-              {image.category}
-            </span>
-          </div>
-
-          <motion.div
-            whileHover={{ scale: 1.2, rotate: 90 }}
-            className="flex-shrink-0 p-2 bg-white/20 backdrop-blur-sm rounded-full"
-          >
-            <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5" />
-          </motion.div>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 }

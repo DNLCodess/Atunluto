@@ -251,7 +251,7 @@ export default function AdminDashboard() {
 
       {/* Last Registration Card */}
       {stats.lastJoinName && (
-        <div className="bg-l-to-r from-green-700 to-green-900 rounded-2xl shadow-lg p-6 text-white">
+        <div className="bg-linear-to-r from-green-700 to-green-900 rounded-2xl shadow-lg p-6 text-white">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
               <Calendar className="w-6 h-6" />
