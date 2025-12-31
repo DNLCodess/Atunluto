@@ -70,7 +70,7 @@ function MissionVisionHero() {
             quality={90}
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-br from-[#1b5e20]/95 to-[#2e7d32]/90" />
+          <div className="absolute inset-0 bg-linear-to-br from-[#1b5e20]/95 to-[#2e7d32]/90" />
         </motion.div>
 
         {/* Decorative elements */}
@@ -469,7 +469,7 @@ function CallToAction() {
   return (
     <section
       ref={ref}
-      className="bg-gradient-to-br from-[#1b5e20] to-[#2e7d32] py-20 md:py-32"
+      className="bg-linear-to-br from-[#1b5e20] to-[#2e7d32] py-20 md:py-32"
     >
       <div className="mx-auto max-w-4xl px-6 sm:px-8 lg:px-12 text-center">
         <motion.div

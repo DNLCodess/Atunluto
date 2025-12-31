@@ -7,7 +7,7 @@ export default function MobileMenu({ setSidebarOpen }) {
         className="fixed inset-0 bg-linear-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
         onClick={() => setSidebarOpen(false)}
       ></div>
-      <div className="relative flex flex-col w-80 max-w-xs bg-gradient-to-b from-green-800 to-green-900">
+      <div className="relative flex flex-col w-80 max-w-xs bg-linear-to-b from-green-800 to-green-900">
         <div className="absolute top-4 right-4">
           <button
             onClick={() => setSidebarOpen(false)}

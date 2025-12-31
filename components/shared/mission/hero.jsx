@@ -172,7 +172,7 @@ export default function Hero() {
                     priority={currentSlide === 0}
                   />
                   {/* Subtle gradient overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent" />
                 </motion.div>
               </AnimatePresence>
             </div>

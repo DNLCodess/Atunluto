@@ -8,15 +8,15 @@ import { ChevronRight, ChevronLeft } from "lucide-react";
 const slides = [
   {
     id: 1,
-    image: "/hero1.jpg",
-    title: "RESCUE NIGERIA",
-    subtitle: "One Office At A Time",
+    image: "/hero2.jpg",
+    title: "Our Motto",
+    subtitle: "Iṣẹ Loogun iṣẹ",
     description:
-      "Join the movement for cooperative politics and grassroots empowerment in Oyo South Senatorial District.",
+      "800+ change makers across 5 LGAs working together for agriculture, healthcare, education, and more.",
   },
   {
     id: 2,
-    image: "/hero2.jpg",
+    image: "/hero1.jpg",
     title: "RESCUE OYO SOUTH",
     subtitle: "Through Shared Responsibility",
     description:
@@ -25,10 +25,11 @@ const slides = [
   {
     id: 3,
     image: "/hero3.jpg",
-    title: "RESCUE OUR FUTURE",
-    subtitle: "Our Motto: Iṣẹ Loogun iṣẹ",
+    title: "RESCUE OUR NIGERIA",
+
+    subtitle: "One Office At A Time",
     description:
-      "800+ change makers across 5 LGAs working together for agriculture, healthcare, education, and more.",
+      "Join the movement for cooperative politics and grassroots empowerment in Oyo South Senatorial District.",
   },
 ];
 
@@ -89,7 +90,7 @@ export default function Hero() {
             />
 
             {/* Dark overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70" />
+            <div className="absolute inset-0 bg-linear-to-b from-black/60 via-black/50 to-black/70" />
           </motion.div>
         </AnimatePresence>
       </div>
@@ -127,7 +128,7 @@ export default function Hero() {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="w-full rounded-full bg-gradient-to-r from-[#d4af37] to-[#f0c85a] px-8 py-4 font-poppins text-base font-bold text-black shadow-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] sm:w-auto md:px-10 md:py-5 md:text-lg"
+                    className="w-full rounded-full bg-linear-to-r from-[#d4af37] to-[#f0c85a] px-8 py-4 font-poppins text-base font-bold text-black shadow-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] sm:w-auto md:px-10 md:py-5 md:text-lg"
                   >
                     <span className="flex items-center justify-center gap-2">
                       Join the Movement
@@ -224,7 +225,7 @@ export default function Hero() {
       </div> */}
 
       {/* Bottom fade to white */}
-      {/* <div className="absolute inset-x-0 bottom-0 z-10 h-32 bg-gradient-to-t from-white to-transparent" /> */}
+      {/* <div className="absolute inset-x-0 bottom-0 z-10 h-32 bg-linear-to-t from-white to-transparent" /> */}
     </section>
   );
 }

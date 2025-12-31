@@ -26,7 +26,7 @@ export default function CTA() {
   return (
     <section
       ref={ref}
-      className="relative overflow-hidden bg-gradient-to-br from-primary-green via-secondary-green to-accent-green py-16 md:py-24"
+      className="relative overflow-hidden bg-linear-to-br from-primary-green via-secondary-green to-accent-green py-16 md:py-24"
       id="register"
     >
       {/* Background Pattern */}
@@ -146,7 +146,7 @@ export default function CTA() {
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary-green to-secondary-green py-4 font-poppins text-base font-bold text-white shadow-lg transition-all hover:shadow-xl"
+                      className="flex w-full items-center justify-center gap-2 rounded-full bg-linear-to-r from-primary-green to-secondary-green py-4 font-poppins text-base font-bold text-white shadow-lg transition-all hover:shadow-xl"
                     >
                       Join Now
                       <ArrowRight className="h-5 w-5" />

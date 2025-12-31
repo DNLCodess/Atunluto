@@ -9,11 +9,5 @@ export const metadata = {
 };
 
 export default function AdminLayout({ children }) {
-  return (
-    <html>
-      <body>
-        <AdminLayoutWrapper>{children}</AdminLayoutWrapper>
-      </body>
-    </html>
-  );
+  return <AdminLayoutWrapper>{children}</AdminLayoutWrapper>;
 }

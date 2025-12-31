@@ -21,7 +21,7 @@ export default function MissionVision() {
   return (
     <section
       ref={ref}
-      className="relative bg-gradient-to-br from-[#1b5e20] via-[#2e7d32] to-[#1b5e20] py-8 md:py-12 overflow-hidden"
+      className="relative bg-linear-to-br from-[#1b5e20] via-[#2e7d32] to-[#1b5e20] py-8 md:py-12 overflow-hidden"
     >
       {/* Animated background pattern */}
       <div className="absolute inset-0 opacity-10">
@@ -136,7 +136,7 @@ export default function MissionVision() {
               <motion.div
                 whileHover={{ rotate: 360 }}
                 transition={{ duration: 0.6 }}
-                className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#4caf50] to-[#66bb6a] rounded-2xl mb-6 shadow-lg"
+                className="inline-flex items-center justify-center w-20 h-20 bg-linear-to-br from-[#4caf50] to-[#66bb6a] rounded-2xl mb-6 shadow-lg"
               >
                 <HiOutlineEye className="w-10 h-10 text-white" />
               </motion.div>
@@ -147,7 +147,7 @@ export default function MissionVision() {
               </h3>
 
               {/* Divider */}
-              <div className="w-16 h-1 bg-gradient-to-r from-[#4caf50] to-transparent rounded-full mb-6" />
+              <div className="w-16 h-1 bg-linear-to-r from-[#4caf50] to-transparent rounded-full mb-6" />
 
               {/* Content */}
               <p className="font-poppins text-lg leading-relaxed text-white/90 mb-6">
@@ -228,7 +228,7 @@ export default function MissionVision() {
                   href="/mission-vision"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="group inline-flex items-center gap-3 bg-gradient-to-r from-[#1b5e20] to-[#2e7d32] text-white px-8 py-4 rounded-2xl font-poppins font-semibold shadow-lg hover:shadow-2xl transition-all cursor-pointer"
+                  className="group inline-flex items-center gap-3 bg-linear-to-r from-[#1b5e20] to-[#2e7d32] text-white px-8 py-4 rounded-2xl font-poppins font-semibold shadow-lg hover:shadow-2xl transition-all cursor-pointer"
                 >
                   <span>Learn More</span>
                   <HiArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

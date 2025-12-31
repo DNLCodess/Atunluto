@@ -46,7 +46,7 @@ export default function EditMemberModal({ member, onClose, onUpdate }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="absolute inset-0 bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
+          className="absolute inset-0 bg-linear-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
           onClick={onClose}
         />
 
@@ -59,7 +59,7 @@ export default function EditMemberModal({ member, onClose, onUpdate }) {
           className="relative bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden"
         >
           {/* Header */}
-          <div className="p-8 border-b border-gray-200 bg-gradient-to-br from-white to-gray-50/50">
+          <div className="p-8 border-b border-gray-200 bg-linear-to-br from-white to-gray-50/50">
             <div className="flex justify-between items-center">
               <motion.h2
                 initial={{ opacity: 0, x: -20 }}

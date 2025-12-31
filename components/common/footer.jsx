@@ -8,7 +8,7 @@ export default function Footer() {
   return (
     <footer className="relative bg-green-950 text-white pt-20 pb-10 overflow-hidden">
       {/* Soft glow background */}
-      <div className="absolute inset-0 bg-gradient-to-t from-green-900/60 to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-linear-to-t from-green-900/60 to-transparent pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 45 }}

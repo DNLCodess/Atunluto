@@ -1,7 +1,9 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import useAuthStore from "@/lib/store";
+import { useAuth } from "@/hooks/useAuth";
+
 // React Icons
 import {
   MdDashboard,
@@ -18,7 +20,7 @@ import {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { role, profile, isLoading } = useAuthStore();
+  const { role, profile, isLoading } = useAuth();
 
   // ICON MAP
   const icons = {
@@ -69,19 +71,48 @@ export default function Sidebar() {
       return [...baseItems, adminItems.gallery];
     }
 
-    // Registration staff and others get base items only
+    // Registration staff gets base items only
+    if (role === "registration") {
+      return baseItems;
+    }
+
+    // Default: base items for any other role
     return baseItems;
   };
 
   const navItems = getNavItems();
 
-  if (isLoading)
+  if (isLoading) {
     return (
-      <div className="w-72 bg-gradient-to-b from-[#1B5E20] to-[#2E7D32] animate-pulse" />
+      <div className="flex flex-col h-full bg-linear-to-b from-[#1B5E20] to-[#2E7D32]">
+        <div className="animate-pulse space-y-4 p-6">
+          {/* Logo skeleton */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg bg-white/10" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-white/10 rounded w-3/4" />
+              <div className="h-3 bg-white/10 rounded w-1/2" />
+            </div>
+          </div>
+          {/* Profile skeleton */}
+          <div className="mt-4 p-3 rounded-lg bg-white/5 space-y-2">
+            <div className="h-3 bg-white/10 rounded w-1/3" />
+            <div className="h-4 bg-white/10 rounded w-2/3" />
+            <div className="h-6 bg-white/10 rounded-full w-20" />
+          </div>
+          {/* Nav items skeleton */}
+          <div className="space-y-2 pt-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-12 bg-white/10 rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </div>
     );
+  }
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-[#1B5E20] to-[#2E7D32] text-white shadow-2xl">
+    <div className="flex flex-col h-full bg-linear-to-b from-[#1B5E20] to-[#2E7D32] text-white shadow-2xl">
       {/* Back to Main Site Button */}
       <Link
         href="/"
@@ -119,18 +150,26 @@ export default function Sidebar() {
               Logged in as
             </p>
             <p className="font-semibold text-sm mb-2 truncate">
-              {profile.full_name}
+              {profile.full_name || profile.email || "Admin User"}
             </p>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#4CAF50] rounded-full text-xs font-bold shadow-lg">
               <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-              {role?.toUpperCase()}
+              {role?.toUpperCase() || "USER"}
             </span>
+          </div>
+        )}
+
+        {!profile && (
+          <div className="mt-4 p-3 rounded-lg bg-white/5 backdrop-blur-sm border border-white/10">
+            <p className="text-[#C8E6C9] text-xs font-medium">
+              Loading profile...
+            </p>
           </div>
         )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+      <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
         {navItems.map((item, index) => {
           const isActive =
             pathname &&
@@ -151,7 +190,7 @@ export default function Sidebar() {
             >
               {/* Hover Effect Background */}
               {!isActive && (
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                <div className="absolute inset-0 bg-linear-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               )}
 
               <span
@@ -183,7 +222,7 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="p-6 border-t border-white/10">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <div className="w-8 h-0.5 bg-gradient-to-r from-transparent via-[#C8E6C9] to-transparent"></div>
+          <div className="w-8 h-0.5 bg-linear-to-r from-transparent via-[#C8E6C9] to-transparent"></div>
         </div>
         <p className="text-[#C8E6C9] text-xs text-center font-medium">
           © 2025 Atunluto Group

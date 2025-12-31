@@ -1,27 +1,33 @@
 "use client";
+
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { loginAdmin } from "@/utils/auth";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function AdminLoginPage() {
   const router = useRouter();
+  const { login, isLoggingIn, loginError, isAuthenticated } = useAuth();
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
   const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/dashboard");
+    }
+  }, [isAuthenticated, router]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    // Clear errors on change
     setErrors({ ...errors, [name]: "" });
-    setLoginError("");
   };
 
   const validateForm = () => {
@@ -45,31 +51,15 @@ export default function AdminLoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoginError("");
 
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
-    setIsSubmitting(true);
-
-    try {
-      const result = await loginAdmin(formData.email, formData.password);
-
-      if (result.success) {
-        // Redirect to admin dashboard
+    login(formData, {
+      onSuccess: () => {
         router.push("/dashboard");
-      } else {
-        setLoginError(result.error);
-        setIsSubmitting(false);
-      }
-    } catch (err) {
-      console.error("Login error:", err);
-      setLoginError("An unexpected error occurred");
-      setIsSubmitting(false);
-    }
+      },
+    });
   };
-
   return (
     <div className="min-h-screen flex">
       {/* Left Side - Login Form (40%) */}
@@ -261,17 +251,17 @@ export default function AdminLoginPage() {
             {/* Submit Button */}
             <motion.button
               type="submit"
-              disabled={isSubmitting}
-              whileHover={{ scale: isSubmitting ? 1 : 1.02 }}
-              whileTap={{ scale: isSubmitting ? 1 : 0.98 }}
+              disabled={isLoggingIn}
+              whileHover={{ scale: isLoggingIn ? 1 : 1.02 }}
+              whileTap={{ scale: isLoggingIn ? 1 : 0.98 }}
               className="w-full px-6 py-4 rounded-xl font-poppins font-semibold text-base transition-all disabled:cursor-not-allowed shadow-lg"
               style={{
-                backgroundColor: isSubmitting ? "#9e9e9e" : "#1b5e20",
+                backgroundColor: isLoggingIn ? "#9e9e9e" : "#1b5e20",
                 color: "#ffffff",
-                opacity: isSubmitting ? 0.7 : 1,
+                opacity: isLoggingIn ? 0.7 : 1,
               }}
             >
-              {isSubmitting ? (
+              {isLoggingIn ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                     <circle

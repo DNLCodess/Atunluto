@@ -53,8 +53,7 @@ const manifestos = [
     description:
       "We will continue granting loans to artisans, traders, farmers, and business owners to improve livelihoods. From 2027 electoral wins, we'll syndicate loans with commercial banks across Oyo South for broader reach.",
     target: "Coverage across all 9 LGAs",
-    timeline:
-      "Reorganize transport unions to access CNG buses on hire purchase",
+    timeline: "Over 1 million SME loans in the first year alone",
     color: "#F57C00",
   },
   {
@@ -73,7 +72,8 @@ const manifestos = [
     description:
       "High-capacity CNG buses will reduce road congestion. We'll work with transport unions and government agencies to redraft routes so vehicles pass through inner residential areas like in other countries, reducing the need for long-distance okada rides.",
     target: "Reduced congestion and improved mobility",
-    timeline: "Bus transit scheme with hire purchase for unions",
+    timeline:
+      "Reorganize transport unions to access CNG buses on hire purchase",
     color: "#5E35B1",
   },
 ];
@@ -209,7 +209,7 @@ export default function ManifestosPage() {
                       className="object-cover"
                       sizes="(max-width: 1024px) 100vw, 50vw"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                    <div className="absolute inset-0 bg-linear-to-t from-black/20 to-transparent" />
                   </motion.div>
                 </AnimatePresence>
               </div>

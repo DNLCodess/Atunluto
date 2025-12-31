@@ -1,26 +1,24 @@
-// components/admin/LayoutWrapper.jsx
+// components/shared/admin/layout-wrapper.jsx
 "use client";
 
 import { useState, useEffect } from "react";
-import useAuthStore from "@/lib/store";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 import Sidebar from "./sidebar";
 import MobileMenu from "./mobile";
 import Header from "./header";
 
 export default function AdminLayoutWrapper({ children }) {
   const router = useRouter();
-  const { user, isLoading, profile } = useAuthStore();
+  const { isAuthenticated, isLoading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [user, isLoading, router]);
+  }, [isAuthenticated, isLoading, router]);
 
-  // Show loading spinner
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
@@ -34,7 +32,7 @@ export default function AdminLayoutWrapper({ children }) {
     );
   }
 
-  if (!user) {
+  if (!isAuthenticated) {
     return null;
   }
 
@@ -59,12 +57,13 @@ export default function AdminLayoutWrapper({ children }) {
         </main>
       </div>
 
-      {/* Mobile Bottom Bar */}
+      {/* Mobile Bottom Navigation Bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
         <div className="flex justify-around py-2">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-3 text-green-700 hover:bg-green-50 rounded-lg transition"
+            aria-label="Open menu"
           >
             <svg
               className="w-6 h-6"

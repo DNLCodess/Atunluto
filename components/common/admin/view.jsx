@@ -17,7 +17,7 @@ export default function ViewMemberModal({ member, onClose }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="absolute inset-0 bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
+          className="absolute inset-0 bg-linear-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
           onClick={onClose}
         />
 
@@ -30,9 +30,9 @@ export default function ViewMemberModal({ member, onClose }) {
           className="relative bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-green-700 to-green-900 text-white p-8 relative overflow-hidden">
+          <div className="bg-linear-to-r from-green-700 to-green-900 text-white p-8 relative overflow-hidden">
             {/* Decorative gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-linear-to-br from-white/10 to-transparent pointer-events-none" />
 
             <div className="relative flex justify-between items-start">
               <div>
@@ -84,7 +84,7 @@ export default function ViewMemberModal({ member, onClose }) {
                   </div>
                   Personal Details
                 </h3>
-                <div className="space-y-4 bg-gradient-to-br from-gray-50 to-gray-100/50 p-6 rounded-2xl border border-gray-200/50">
+                <div className="space-y-4 bg-linear-to-br from-gray-50 to-gray-100/50 p-6 rounded-2xl border border-gray-200/50">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0">
                       <Phone className="w-5 h-5 text-green-600" />
@@ -142,7 +142,7 @@ export default function ViewMemberModal({ member, onClose }) {
                   </div>
                   Political Unit
                 </h3>
-                <div className="space-y-4 bg-gradient-to-br from-gray-50 to-gray-100/50 p-6 rounded-2xl border border-gray-200/50">
+                <div className="space-y-4 bg-linear-to-br from-gray-50 to-gray-100/50 p-6 rounded-2xl border border-gray-200/50">
                   <div>
                     <p className="text-sm text-gray-500 font-medium">
                       Local Government Area
@@ -177,7 +177,7 @@ export default function ViewMemberModal({ member, onClose }) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
-                className="bg-gradient-to-br from-gray-50 to-gray-100/50 p-6 rounded-2xl border border-gray-200/50"
+                className="bg-linear-to-br from-gray-50 to-gray-100/50 p-6 rounded-2xl border border-gray-200/50"
               >
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">
                   Residential Address

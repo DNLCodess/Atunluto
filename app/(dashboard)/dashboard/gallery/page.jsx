@@ -558,7 +558,7 @@ export default function AdminGalleryPage() {
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   className="object-cover group-hover:scale-110 transition-transform duration-300"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="absolute bottom-0 left-0 right-0 p-4 flex gap-2">
                     <button
                       onClick={() => setViewImage(image)}
@@ -704,7 +704,7 @@ export default function AdminGalleryPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
+              className="absolute inset-0 bg-linear-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
               onClick={() => !uploading && setShowUploadModal(false)}
             />
 
@@ -984,7 +984,7 @@ export default function AdminGalleryPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
+              className="absolute inset-0 bg-linear-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-md"
               onClick={() => setEditImage(null)}
             />
 
@@ -1092,7 +1092,7 @@ export default function AdminGalleryPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-gradient-to-br from-red-900/40 via-gray-900/60 to-red-900/40 backdrop-blur-md"
+              className="absolute inset-0 bg-linear-to-br from-red-900/40 via-gray-900/60 to-red-900/40 backdrop-blur-md"
               onClick={() => setDeleteImage(null)}
             />
 
@@ -1103,7 +1103,7 @@ export default function AdminGalleryPage() {
               className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full p-8"
             >
               <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-100">
+                <div className="w-20 h-20 bg-linear-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-100">
                   <Trash2 className="w-10 h-10 text-red-600" />
                 </div>
 
@@ -1135,7 +1135,7 @@ export default function AdminGalleryPage() {
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold shadow-lg shadow-red-600/30 transition"
+                  className="flex-1 py-3 bg-linear-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold shadow-lg shadow-red-600/30 transition"
                 >
                   Delete Permanently
                 </button>

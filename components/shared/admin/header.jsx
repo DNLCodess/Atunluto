@@ -88,7 +88,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 transition"
             >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center text-white font-bold text-lg shadow-md">
+              <div className="w-10 h-10 rounded-full bg-linear-to-br from-green-600 to-green-700 flex items-center justify-center text-white font-bold text-lg shadow-md">
                 {user?.email?.[0]?.toUpperCase() || "A"}
               </div>
               <ChevronDown
@@ -109,9 +109,9 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
                   className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
                 >
                   {/* User Info */}
-                  <div className="p-4 bg-gradient-to-br from-green-50 to-white border-b border-gray-200">
+                  <div className="p-4 bg-linear-to-br from-green-50 to-white border-b border-gray-200">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center text-white font-bold text-xl">
+                      <div className="w-12 h-12 rounded-full bg-linear-to-br from-green-600 to-green-700 flex items-center justify-center text-white font-bold text-xl">
                         {user?.email?.[0]?.toUpperCase() || "A"}
                       </div>
                       <div className="flex-1 min-w-0">

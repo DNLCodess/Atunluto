@@ -1,23 +1,21 @@
-// app/admin/members/page.jsx
+// app/dashboard/members/page.jsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { createClient } from "@/supabase/client";
-import useAuthStore from "@/lib/store";
+import { useMembers } from "@/hooks/useMember";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Search,
   Plus,
   Edit2,
   Trash2,
   Download,
-  Filter,
   ChevronLeft,
   ChevronRight,
   MapPin,
   Phone,
   MessageCircle,
-  X,
   Eye,
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -26,95 +24,59 @@ import ViewMemberModal from "@/components/common/admin/view";
 import EditMemberModal from "@/components/common/admin/edit";
 import { AnimatePresence, motion } from "framer-motion";
 
-const supabase = createClient();
-
 export default function MembersPage() {
-  const { role } = useAuthStore();
-  const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { role } = useAuth();
+  const { members, isLoading, deleteMember, isDeleting } = useMembers();
+
   const [search, setSearch] = useState("");
   const [lgaFilter, setLgaFilter] = useState("all");
   const [wardFilter, setWardFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [editMember, setEditMember] = useState(null);
-  const [deleteMember, setDeleteMember] = useState(null);
+  const [deleteMemberModal, setDeleteMemberModal] = useState(null);
   const [viewMember, setViewMember] = useState(null);
 
   const PAGE_SIZE = 10;
 
-  // Fetch members + real-time
-  useEffect(() => {
-    const fetchMembers = async () => {
-      const { data, error } = await supabase
-        .from("members")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching members:", error);
-      } else {
-        setMembers(data || []);
-      }
-      setLoading(false);
-    };
-
-    fetchMembers();
-
-    // Real-time subscription
-    const channel = supabase
-      .channel("members-changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "members" },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            setMembers((prev) => [payload.new, ...prev]);
-          } else if (payload.eventType === "UPDATE") {
-            setMembers((prev) =>
-              prev.map((m) => (m.id === payload.new.id ? payload.new : m))
-            );
-          } else if (payload.eventType === "DELETE") {
-            setMembers((prev) => prev.filter((m) => m.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   // Filters
   const filteredMembers = useMemo(() => {
+    if (!members || members.length === 0) return [];
+
     return members.filter((m) => {
       const matchesSearch =
-        m.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        m.phone.includes(search) ||
-        m.polling_unit.toLowerCase().includes(search.toLowerCase());
+        m.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+        m.phone?.includes(search) ||
+        m.polling_unit?.toLowerCase().includes(search.toLowerCase());
 
       const matchesLga = lgaFilter === "all" || m.lga === lgaFilter;
-      const matchesWard = wardFilter === "all" || m.ward === lgaFilter;
+      const matchesWard = wardFilter === "all" || m.ward === wardFilter;
 
       return matchesSearch && matchesLga && matchesWard;
     });
   }, [members, search, lgaFilter, wardFilter]);
 
-  const paginated = filteredMembers.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
-  );
+  const paginated = useMemo(() => {
+    return filteredMembers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  }, [filteredMembers, page]);
+
   const totalPages = Math.ceil(filteredMembers.length / PAGE_SIZE);
 
-  const uniqueLGAs = [...new Set(members.map((m) => m.lga))].sort();
-  const uniqueWards = [...new Set(members.map((m) => m.ward))].sort();
+  const uniqueLGAs = useMemo(() => {
+    if (!members || members.length === 0) return [];
+    return [...new Set(members.map((m) => m.lga))].sort();
+  }, [members]);
+
+  const uniqueWards = useMemo(() => {
+    if (!members || members.length === 0) return [];
+    return [...new Set(members.map((m) => m.ward))].sort();
+  }, [members]);
 
   // Export to Excel
   const exportToExcel = () => {
     const data = filteredMembers.map((m) => ({
       "Full Name": m.full_name,
       Phone: m.phone,
-      WhatsApp: m.whatsapp,
+      WhatsApp: m.whatsapp || "N/A",
       LGA: m.lga,
       Ward: m.ward,
       "Polling Unit": m.polling_unit,
@@ -131,16 +93,27 @@ export default function MembersPage() {
   };
 
   // Delete handler
-  const handleDelete = async () => {
-    if (!deleteMember) return;
-    await supabase.from("members").delete().eq("id", deleteMember.id);
-    setDeleteMember(null);
+  const handleDelete = () => {
+    if (!deleteMemberModal) return;
+
+    deleteMember(deleteMemberModal.id, {
+      onSuccess: () => {
+        setDeleteMemberModal(null);
+      },
+      onError: (error) => {
+        console.error("Delete failed:", error);
+        alert("Failed to delete member. Please try again.");
+      },
+    });
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-600 font-medium">Loading Members...</p>
+        </div>
       </div>
     );
   }
@@ -173,7 +146,8 @@ export default function MembersPage() {
 
           <button
             onClick={exportToExcel}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-blue-700 hover:bg-blue-800 text-white font-medium rounded-xl shadow-md transition"
+            disabled={filteredMembers.length === 0}
+            className="inline-flex items-center gap-2 px-5 py-3 bg-blue-700 hover:bg-blue-800 text-white font-medium rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-5 h-5" />
             Export Excel
@@ -223,140 +197,159 @@ export default function MembersPage() {
             <option value="all">All Wards</option>
             {uniqueWards.map((ward) => (
               <option key={ward} value={ward}>
-                {ward}
+                Ward {ward}
               </option>
             ))}
           </select>
         </div>
       </div>
 
-      {/* Members Grid */}
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {paginated.map((member) => (
-          <div
-            key={member.id}
-            className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-100 overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-green-700 to-green-900 p-6 text-white">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="text-xl font-bold">{member.full_name}</h3>
-                  <p className="text-green-100 text-sm mt-1">
-                    {format(new Date(member.created_at), "dd MMM yyyy")}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center font-bold">
-                  {member.full_name[0]}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-green-600" />
-                  <div>
-                    <p className="font-medium">{member.lga} LGA</p>
-                    <p className="text-gray-500">
-                      Ward {member.ward} • {member.polling_unit}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-green-600" />
-                  <span>{member.phone}</span>
-                </div>
-                {member.whatsapp && (
-                  <div className="flex items-center gap-3">
-                    <MessageCircle className="w-5 h-5 text-green-600" />
-                    <span>{member.whatsapp}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t">
-                <button
-                  onClick={() => setViewMember(member)}
-                  className="text-green-600 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  View
-                </button>
-                {role === "admin" && (
-                  <button
-                    onClick={() => setEditMember(member)}
-                    className="text-green-600 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                )}
-                {role === "super_user" && (
-                  <button
-                    onClick={() => setDeleteMember(member)}
-                    className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
-                )}
-              </div>
-            </div>
+      {/* Empty State */}
+      {filteredMembers.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
+          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="w-10 h-10 text-gray-400" />
           </div>
-        ))}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="p-3 rounded-xl bg-white shadow hover:shadow-md disabled:opacity-50"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <span className="text-gray-700 font-medium">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="p-3 rounded-xl bg-white shadow hover:shadow-md disabled:opacity-50"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            No Members Found
+          </h3>
+          <p className="text-gray-600">
+            {search || lgaFilter !== "all" || wardFilter !== "all"
+              ? "Try adjusting your search filters"
+              : "No members have been registered yet"}
+          </p>
         </div>
+      ) : (
+        <>
+          {/* Members Grid */}
+          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {paginated.map((member) => (
+              <div
+                key={member.id}
+                className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-100 overflow-hidden"
+              >
+                <div className="bg-linear-to-r from-green-700 to-green-900 p-6 text-white">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-xl font-bold">{member.full_name}</h3>
+                      <p className="text-green-100 text-sm mt-1">
+                        {format(new Date(member.created_at), "dd MMM yyyy")}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center font-bold">
+                      {member.full_name[0]}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center gap-3">
+                      <MapPin className="w-5 h-5 text-green-600" />
+                      <div>
+                        <p className="font-medium">{member.lga} LGA</p>
+                        <p className="text-gray-500">
+                          Ward {member.ward} • {member.polling_unit}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Phone className="w-5 h-5 text-green-600" />
+                      <span>{member.phone}</span>
+                    </div>
+                    {member.whatsapp && (
+                      <div className="flex items-center gap-3">
+                        <MessageCircle className="w-5 h-5 text-green-600" />
+                        <span>{member.whatsapp}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t">
+                    <button
+                      onClick={() => setViewMember(member)}
+                      className="text-green-600 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View
+                    </button>
+                    {role === "admin" && (
+                      <button
+                        onClick={() => setEditMember(member)}
+                        className="text-green-600 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit
+                      </button>
+                    )}
+                    {role === "super_user" && (
+                      <button
+                        onClick={() => setDeleteMemberModal(member)}
+                        className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-3 rounded-xl bg-white shadow hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-gray-700 font-medium">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-3 rounded-xl bg-white shadow hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+        </>
       )}
+
+      {/* View Member Modal */}
       {viewMember && (
         <ViewMemberModal
           member={viewMember}
           onClose={() => setViewMember(null)}
         />
       )}
+
+      {/* Edit Member Modal */}
       {editMember && (
         <EditMemberModal
           member={editMember}
           onClose={() => setEditMember(null)}
-          onUpdate={(updated) => {
-            setMembers((prev) =>
-              prev.map((m) => (m.id === updated.id ? updated : m))
-            );
-          }}
         />
       )}
+
       {/* Delete Modal */}
-      {deleteMember && (
-        <AnimatePresence>
+      <AnimatePresence>
+        {deleteMemberModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Glossy Backdrop */}
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-gradient-to-br from-red-900/40 via-gray-900/60 to-red-900/40 backdrop-blur-md"
-              onClick={() => setDeleteMember(null)}
+              className="absolute inset-0 bg-linear-to-br from-red-900/40 via-gray-900/60 to-red-900/40 backdrop-blur-md"
+              onClick={() => !isDeleting && setDeleteMemberModal(null)}
             />
 
             {/* Modal Content */}
@@ -384,7 +377,7 @@ export default function MembersPage() {
                     stiffness: 200,
                     damping: 15,
                   }}
-                  className="w-20 h-20 bg-gradient-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-100"
+                  className="w-20 h-20 bg-linear-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-100"
                 >
                   <motion.div
                     animate={{
@@ -416,7 +409,7 @@ export default function MembersPage() {
                 >
                   Are you sure you want to permanently delete{" "}
                   <span className="font-bold text-gray-900">
-                    {deleteMember.full_name}
+                    {deleteMemberModal.full_name}
                   </span>
                   ?
                 </motion.p>
@@ -452,26 +445,35 @@ export default function MembersPage() {
                 className="flex gap-4"
               >
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setDeleteMember(null)}
-                  className="flex-1 py-3 border-2 border-gray-300 rounded-xl hover:bg-gray-50 font-semibold text-gray-700 transition"
+                  whileHover={{ scale: isDeleting ? 1 : 1.02 }}
+                  whileTap={{ scale: isDeleting ? 1 : 0.98 }}
+                  onClick={() => setDeleteMemberModal(null)}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 border-2 border-gray-300 rounded-xl hover:bg-gray-50 font-semibold text-gray-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </motion.button>
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: isDeleting ? 1 : 1.02 }}
+                  whileTap={{ scale: isDeleting ? 1 : 0.98 }}
                   onClick={handleDelete}
-                  className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold shadow-lg shadow-red-600/30 transition"
+                  disabled={isDeleting}
+                  className="flex-1 py-3 bg-linear-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold shadow-lg shadow-red-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Delete Permanently
+                  {isDeleting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete Permanently"
+                  )}
                 </motion.button>
               </motion.div>
             </motion.div>
           </div>
-        </AnimatePresence>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
