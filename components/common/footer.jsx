@@ -74,8 +74,9 @@ export default function Footer() {
 
             <div className="space-y-3 text-sm text-gray-300">
               <p>Email: atunlutogroup@gmail.com</p>
-              <p>Phone: +234 000 000 0000</p>
-              <p>Oyo South, Nigeria</p>
+              <p>Whatsapp: +2349157413851</p>
+              <p>Tel: +2349121212110</p>
+              <p>17B Adeyi Avenue, Bodija estate Ibadan Oyo State Nigeria</p>
             </div>
           </div>
 
