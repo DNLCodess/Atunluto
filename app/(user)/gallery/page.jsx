@@ -8,9 +8,9 @@ import { Search, Grid3x3 } from "lucide-react";
 import FullscreenViewer from "@/components/shared/gallery/FullScreenViewer";
 import InfiniteRow from "@/components/shared/gallery/InfiniteRow";
 
-const supabase = createClient();
-
 export default function GalleryPage() {
+  const supabase = createClient();
+
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);

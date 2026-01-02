@@ -38,10 +38,7 @@ export default function RegisterPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleSuccess = (data) => {
-    console.log("New member registered:", data);
-    // Optional: Add analytics tracking, redirect, etc.
-  };
+  const handleSuccess = (data) => {};
 
   const handleError = (error) => {
     console.error("Registration failed:", error);

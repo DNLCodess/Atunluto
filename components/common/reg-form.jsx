@@ -1,10 +1,9 @@
+// components/MemberRegistrationForm.jsx
 "use client";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
-import { createClient } from "@/supabase/client";
+import { useState, useRef } from "react";
 import { lgaData } from "@/lib/data";
-
-// LGA data with their wards
+import Image from "next/image";
 
 export default function MemberRegistrationForm({
   onSuccess,
@@ -22,12 +21,17 @@ export default function MemberRegistrationForm({
     lga: "",
     ward: "",
     pollingUnit: "",
+    dateOfBirth: "",
+    gender: "",
   });
   const [selectedLGA, setSelectedLGA] = useState("");
   const [wards, setWards] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null);
   const [errors, setErrors] = useState({});
+  const [profileImage, setProfileImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileInputRef = useRef(null);
 
   const handleLGAChange = (e) => {
     const lga = e.target.value;
@@ -43,8 +47,61 @@ export default function MemberRegistrationForm({
     setErrors({ ...errors, [name]: "" });
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setErrors({
+        ...errors,
+        profileImage: "Only JPEG, PNG, and WebP images are allowed",
+      });
+      return;
+    }
+
+    // Validate file size (5MB)
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setErrors({
+        ...errors,
+        profileImage: "Image size must be less than 5MB",
+      });
+      return;
+    }
+
+    setProfileImage(file);
+    setErrors({ ...errors, profileImage: "" });
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const calculateAge = (birthDate) => {
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birth.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  };
+
   const validateForm = () => {
     const newErrors = {};
+
     if (!formData.fullName.trim()) newErrors.fullName = "Name is required";
     if (!formData.address.trim()) newErrors.address = "Address is required";
     if (!formData.phone.trim()) newErrors.phone = "Phone number is required";
@@ -54,10 +111,22 @@ export default function MemberRegistrationForm({
     if (!formData.ward) newErrors.ward = "Please select your ward";
     if (!formData.pollingUnit.trim())
       newErrors.pollingUnit = "Polling unit is required";
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = "Date of birth is required";
+    } else {
+      const age = calculateAge(formData.dateOfBirth);
+      if (age < 18) {
+        newErrors.dateOfBirth = "You must be at least 18 years old to register";
+      }
+    }
+    if (!formData.gender) newErrors.gender = "Please select your gender";
+    if (!profileImage) newErrors.profileImage = "Profile photo is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  // Update only the handleSubmit function in MemberRegistrationForm.jsx
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -67,22 +136,37 @@ export default function MemberRegistrationForm({
     setSubmitStatus(null);
 
     try {
+      const formDataToSend = new FormData();
+      formDataToSend.append("full_name", formData.fullName);
+      formDataToSend.append("address", formData.address);
+      formDataToSend.append("phone", formData.phone);
+      formDataToSend.append("whatsapp", formData.whatsapp);
+      formDataToSend.append("messenger", formData.messenger || "");
+      formDataToSend.append("lga", formData.lga);
+      formDataToSend.append("ward", formData.ward);
+      formDataToSend.append("polling_unit", formData.pollingUnit);
+      formDataToSend.append("date_of_birth", formData.dateOfBirth);
+      formDataToSend.append("gender", formData.gender);
+
+      if (profileImage) {
+        formDataToSend.append("profile_image", profileImage);
+      }
+
       const response = await fetch("/api/register-member", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          full_name: formData.fullName,
-          address: formData.address,
-          phone: formData.phone,
-          whatsapp: formData.whatsapp,
-          messenger: formData.messenger || null,
-          lga: formData.lga,
-          ward: formData.ward,
-          polling_unit: formData.pollingUnit,
-        }),
+        body: formDataToSend,
+        // Don't set Content-Type header - browser will set it automatically with boundary
       });
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response:", text);
+        throw new Error(
+          "Server returned an invalid response. Please check the console for details."
+        );
+      }
 
       const result = await response.json();
 
@@ -104,15 +188,29 @@ export default function MemberRegistrationForm({
           lga: "",
           ward: "",
           pollingUnit: "",
+          dateOfBirth: "",
+          gender: "",
         });
         setSelectedLGA("");
         setWards([]);
+        setProfileImage(null);
+        setImagePreview(null);
         setSubmitStatus(null);
         setErrors({});
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
       }, 3000);
     } catch (err) {
       console.error("Registration error:", err);
       setSubmitStatus("error");
+
+      // Show more specific error message
+      setErrors({
+        ...errors,
+        submit: err.message || "An error occurred during registration",
+      });
+
       if (onError) onError(err);
     } finally {
       setIsSubmitting(false);
@@ -121,7 +219,6 @@ export default function MemberRegistrationForm({
 
   return (
     <div className={className}>
-      {/* Form Header (Optional) */}
       {showHeader && (
         <div className="mb-8">
           <h2
@@ -132,12 +229,95 @@ export default function MemberRegistrationForm({
           </h2>
           <p className="font-poppins text-sm" style={{ color: "#757575" }}>
             Complete the form below to register a new member. All fields marked
-            with * are required.
+            with * are required. Members must be at least 18 years old.
           </p>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Profile Image Upload */}
+        <div>
+          <label
+            className="block font-poppins text-sm font-semibold mb-2"
+            style={{ color: "#212121" }}
+          >
+            Profile Photo <span style={{ color: "#e53935" }}>*</span>
+          </label>
+          <div className="flex items-start gap-4">
+            <div
+              className="w-32 h-32 rounded-lg border-2 overflow-hidden flex items-center justify-center"
+              style={{
+                borderColor: errors.profileImage ? "#e53935" : "#e0e0e0",
+                backgroundColor: "#f5f5f5",
+              }}
+            >
+              {imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="text-center p-4">
+                  <svg
+                    className="w-12 h-12 mx-auto mb-2"
+                    fill="none"
+                    stroke="#9e9e9e"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                  <p
+                    className="font-poppins text-xs"
+                    style={{ color: "#9e9e9e" }}
+                  >
+                    No photo
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageChange}
+                className="hidden"
+                id="profileImage"
+              />
+              <label
+                htmlFor="profileImage"
+                className="inline-block px-6 py-3 rounded-lg font-poppins font-medium text-sm cursor-pointer transition-all hover:opacity-90"
+                style={{
+                  backgroundColor: "#4caf50",
+                  color: "#ffffff",
+                }}
+              >
+                Choose Photo
+              </label>
+              <p
+                className="mt-2 font-poppins text-xs"
+                style={{ color: "#757575" }}
+              >
+                JPEG, PNG or WebP • Max 5MB
+              </p>
+              {errors.profileImage && (
+                <p
+                  className="mt-1 font-poppins text-xs"
+                  style={{ color: "#e53935" }}
+                >
+                  {errors.profileImage}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Full Name */}
         <div>
           <label
@@ -174,6 +354,90 @@ export default function MemberRegistrationForm({
               {errors.fullName}
             </p>
           )}
+        </div>
+
+        {/* Date of Birth and Gender */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <label
+              htmlFor="dateOfBirth"
+              className="block font-poppins text-sm font-semibold mb-2"
+              style={{ color: "#212121" }}
+            >
+              Date of Birth <span style={{ color: "#e53935" }}>*</span>
+            </label>
+            <input
+              type="date"
+              id="dateOfBirth"
+              name="dateOfBirth"
+              value={formData.dateOfBirth}
+              onChange={handleChange}
+              max={
+                new Date(new Date().setFullYear(new Date().getFullYear() - 18))
+                  .toISOString()
+                  .split("T")[0]
+              }
+              className="w-full px-4 py-3 rounded-lg border-2 font-poppins text-base transition-all focus:outline-none"
+              style={{
+                borderColor: errors.dateOfBirth ? "#e53935" : "#e0e0e0",
+                color: "#212121",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "#1b5e20")}
+              onBlur={(e) =>
+                (e.target.style.borderColor = errors.dateOfBirth
+                  ? "#e53935"
+                  : "#e0e0e0")
+              }
+            />
+            {errors.dateOfBirth && (
+              <p
+                className="mt-1 font-poppins text-xs"
+                style={{ color: "#e53935" }}
+              >
+                {errors.dateOfBirth}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="gender"
+              className="block font-poppins text-sm font-semibold mb-2"
+              style={{ color: "#212121" }}
+            >
+              Gender <span style={{ color: "#e53935" }}>*</span>
+            </label>
+            <select
+              id="gender"
+              name="gender"
+              value={formData.gender}
+              onChange={handleChange}
+              className="w-full px-4 py-3 rounded-lg border-2 font-poppins text-base transition-all focus:outline-none"
+              style={{
+                borderColor: errors.gender ? "#e53935" : "#e0e0e0",
+                color: formData.gender ? "#212121" : "#757575",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "#1b5e20")}
+              onBlur={(e) =>
+                (e.target.style.borderColor = errors.gender
+                  ? "#e53935"
+                  : "#e0e0e0")
+              }
+            >
+              <option value="">-- Select gender --</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="prefer_not_to_say">Prefer not to say</option>
+            </select>
+            {errors.gender && (
+              <p
+                className="mt-1 font-poppins text-xs"
+                style={{ color: "#e53935" }}
+              >
+                {errors.gender}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Address */}
@@ -506,9 +770,24 @@ export default function MemberRegistrationForm({
               <p className="font-poppins text-sm" style={{ color: "#2e7d32" }}>
                 Member has been successfully registered.
               </p>
+              {/* Show membership number if available */}
+              {onSuccess && (
+                <div className="mt-4 p-3 bg-white/60 rounded-lg inline-block">
+                  <p className="text-xs text-gray-600 mb-1">
+                    Membership Number
+                  </p>
+                  <p
+                    className="font-mono font-bold text-lg"
+                    style={{ color: "#1b5e20" }}
+                  >
+                    {/* This will be populated by the parent component */}
+                  </p>
+                </div>
+              )}
             </motion.div>
           )}
-          {submitStatus === "error" && (
+
+          {submitStatus === "error" && errors.submit && (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -527,7 +806,7 @@ export default function MemberRegistrationForm({
                 Registration Failed
               </p>
               <p className="font-poppins text-sm" style={{ color: "#c62828" }}>
-                An error occurred. Please try again.
+                {errors.submit}
               </p>
             </motion.div>
           )}

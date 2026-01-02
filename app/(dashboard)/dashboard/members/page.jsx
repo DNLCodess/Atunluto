@@ -17,12 +17,15 @@ import {
   Phone,
   MessageCircle,
   Eye,
+  Calendar,
+  User,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
 import ViewMemberModal from "@/components/common/admin/view";
 import EditMemberModal from "@/components/common/admin/edit";
 import { AnimatePresence, motion } from "framer-motion";
+import Image from "next/image";
 
 export default function MembersPage() {
   const { role } = useAuth();
@@ -31,12 +34,31 @@ export default function MembersPage() {
   const [search, setSearch] = useState("");
   const [lgaFilter, setLgaFilter] = useState("all");
   const [wardFilter, setWardFilter] = useState("all");
+  const [genderFilter, setGenderFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [editMember, setEditMember] = useState(null);
   const [deleteMemberModal, setDeleteMemberModal] = useState(null);
   const [viewMember, setViewMember] = useState(null);
 
   const PAGE_SIZE = 10;
+
+  // Calculate age from date of birth
+  const calculateAge = (dateOfBirth) => {
+    if (!dateOfBirth) return null;
+    const today = new Date();
+    const birth = new Date(dateOfBirth);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birth.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  };
 
   // Filters
   const filteredMembers = useMemo(() => {
@@ -50,10 +72,11 @@ export default function MembersPage() {
 
       const matchesLga = lgaFilter === "all" || m.lga === lgaFilter;
       const matchesWard = wardFilter === "all" || m.ward === wardFilter;
+      const matchesGender = genderFilter === "all" || m.gender === genderFilter;
 
-      return matchesSearch && matchesLga && matchesWard;
+      return matchesSearch && matchesLga && matchesWard && matchesGender;
     });
-  }, [members, search, lgaFilter, wardFilter]);
+  }, [members, search, lgaFilter, wardFilter, genderFilter]);
 
   const paginated = useMemo(() => {
     return filteredMembers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -72,15 +95,24 @@ export default function MembersPage() {
   }, [members]);
 
   // Export to Excel
+  // Update exportToExcel function in members/page.jsx
   const exportToExcel = () => {
     const data = filteredMembers.map((m) => ({
+      "Membership Number": m.membership_number,
       "Full Name": m.full_name,
+      Gender: m.gender ? m.gender.replace("_", " ").toUpperCase() : "N/A",
+      Age: m.date_of_birth ? calculateAge(m.date_of_birth) : "N/A",
+      "Date of Birth": m.date_of_birth
+        ? format(new Date(m.date_of_birth), "dd/MM/yyyy")
+        : "N/A",
       Phone: m.phone,
       WhatsApp: m.whatsapp || "N/A",
+      Messenger: m.messenger || "N/A",
       LGA: m.lga,
       Ward: m.ward,
       "Polling Unit": m.polling_unit,
-      Registered: format(new Date(m.created_at), "PPP"),
+      Address: m.address || "N/A",
+      Registered: format(new Date(m.created_at), "dd/MM/yyyy"),
     }));
 
     const wb = XLSX.utils.book_new();
@@ -157,7 +189,7 @@ export default function MembersPage() {
 
       {/* Filters */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
             <input
@@ -201,6 +233,19 @@ export default function MembersPage() {
               </option>
             ))}
           </select>
+          <select
+            value={genderFilter}
+            onChange={(e) => {
+              setGenderFilter(e.target.value);
+              setPage(1);
+            }}
+            className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
+          >
+            <option value="all">All Genders</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="prefer_not_to_say">Prefer not to say</option>
+          </select>
         </div>
       </div>
 
@@ -214,7 +259,10 @@ export default function MembersPage() {
             No Members Found
           </h3>
           <p className="text-gray-600">
-            {search || lgaFilter !== "all" || wardFilter !== "all"
+            {search ||
+            lgaFilter !== "all" ||
+            wardFilter !== "all" ||
+            genderFilter !== "all"
               ? "Try adjusting your search filters"
               : "No members have been registered yet"}
           </p>
@@ -222,45 +270,103 @@ export default function MembersPage() {
       ) : (
         <>
           {/* Members Grid */}
+
+          {/* Members Grid */}
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {paginated.map((member) => (
               <div
                 key={member.id}
                 className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all border border-gray-100 overflow-hidden"
               >
-                <div className="bg-linear-to-r from-green-700 to-green-900 p-6 text-white">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-bold">{member.full_name}</h3>
-                      <p className="text-green-100 text-sm mt-1">
+                <div className="bg-gradient-to-r from-green-700 to-green-900 p-6 text-white">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-bold truncate">
+                        {member.full_name}
+                      </h3>
+                      {/* Membership Number Badge */}
+                      <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-lg">
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"
+                          />
+                        </svg>
+                        <span className="text-sm font-mono font-semibold">
+                          {member.membership_number}
+                        </span>
+                      </div>
+                      <p className="text-green-100 text-xs mt-2">
+                        Registered:{" "}
                         {format(new Date(member.created_at), "dd MMM yyyy")}
                       </p>
                     </div>
-                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center font-bold">
-                      {member.full_name[0]}
+                    <div className="shrink-0">
+                      {member.profile_image_url ? (
+                        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/30">
+                          <img
+                            src={member.profile_image_url}
+                            alt={member.full_name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center font-bold text-xl">
+                          {member.full_name[0]}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
+                {/* Rest of the card remains the same */}
                 <div className="p-6 space-y-4">
+                  {(member.date_of_birth || member.gender) && (
+                    <div className="flex items-center gap-4 text-sm pb-3 border-b border-gray-100">
+                      {member.date_of_birth && (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-green-600" />
+                          <span className="text-gray-700">
+                            {calculateAge(member.date_of_birth)} years
+                          </span>
+                        </div>
+                      )}
+                      {member.gender && (
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-green-600" />
+                          <span className="text-gray-700 capitalize">
+                            {member.gender.replace("_", " ")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-3 text-sm">
-                    <div className="flex items-center gap-3">
-                      <MapPin className="w-5 h-5 text-green-600" />
-                      <div>
+                    <div className="flex items-start gap-3">
+                      <MapPin className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
                         <p className="font-medium">{member.lga} LGA</p>
-                        <p className="text-gray-500">
+                        <p className="text-gray-500 text-xs">
                           Ward {member.ward} • {member.polling_unit}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Phone className="w-5 h-5 text-green-600" />
-                      <span>{member.phone}</span>
+                      <Phone className="w-5 h-5 text-green-600 flex-shrink-0" />
+                      <span className="truncate">{member.phone}</span>
                     </div>
                     {member.whatsapp && (
                       <div className="flex items-center gap-3">
-                        <MessageCircle className="w-5 h-5 text-green-600" />
-                        <span>{member.whatsapp}</span>
+                        <MessageCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                        <span className="truncate">{member.whatsapp}</span>
                       </div>
                     )}
                   </div>
@@ -296,7 +402,6 @@ export default function MembersPage() {
               </div>
             ))}
           </div>
-
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-4">
@@ -348,7 +453,7 @@ export default function MembersPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-linear-to-br from-red-900/40 via-gray-900/60 to-red-900/40 backdrop-blur-md"
+              className="absolute inset-0 bg-gradient-to-br from-red-900/40 via-gray-900/60 to-red-900/40 backdrop-blur-md"
               onClick={() => !isDeleting && setDeleteMemberModal(null)}
             />
 
@@ -377,7 +482,7 @@ export default function MembersPage() {
                     stiffness: 200,
                     damping: 15,
                   }}
-                  className="w-20 h-20 bg-linear-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-100"
+                  className="w-20 h-20 bg-gradient-to-br from-red-100 to-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-100"
                 >
                   <motion.div
                     animate={{
@@ -458,7 +563,7 @@ export default function MembersPage() {
                   whileTap={{ scale: isDeleting ? 1 : 0.98 }}
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex-1 py-3 bg-linear-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold shadow-lg shadow-red-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl font-semibold shadow-lg shadow-red-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isDeleting ? (
                     <>

@@ -39,12 +39,13 @@ const manifestos = [
   },
   {
     title: "Education",
-    subtitle: "Infrastructure & Teacher Development",
+    subtitle: "Infrastructure, Teacher Development & Digital Literacy",
     description:
-      "We will ensure office holders from this group work towards improvements in learning environments through repairs of existing structures, building new ones, and insisting on teacher upgrades so learning outcomes match Western world standards.",
-    target: "Significant improvement in educational standards within 4 years",
+      "We will ensure office holders from this group work towards improvements in learning environments through repairs of existing structures, building new ones, and insisting on teacher upgrades so learning outcomes match Western world standards. We will provide digital and ICT training for WAEC students to help them excel in their CBT (Computer-Based Test) exams, ensuring our students are well-prepared for modern examination formats.",
+    target:
+      "Significant improvement in educational standards and digital literacy within 4 years",
     timeline:
-      "Technical colleges upgraded with laboratory equipment and overseas volunteer teachers",
+      "Technical colleges upgraded with laboratory equipment and overseas volunteer teachers. ICT training centers established in schools to prepare WAEC students for CBT exams.",
     color: "#1976D2",
   },
   {
