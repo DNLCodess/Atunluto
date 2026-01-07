@@ -19,11 +19,13 @@ import {
   Eye,
   Calendar,
   User,
+  CreditCard,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
 import ViewMemberModal from "@/components/common/admin/view";
 import EditMemberModal from "@/components/common/admin/edit";
+import MembershipCardPrinter from "@/components/shared/admin/card-printer";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 
@@ -39,6 +41,7 @@ export default function MembersPage() {
   const [editMember, setEditMember] = useState(null);
   const [deleteMemberModal, setDeleteMemberModal] = useState(null);
   const [viewMember, setViewMember] = useState(null);
+  const [printCardMember, setPrintCardMember] = useState(null);
 
   const PAGE_SIZE = 10;
 
@@ -95,7 +98,6 @@ export default function MembersPage() {
   }, [members]);
 
   // Export to Excel
-  // Update exportToExcel function in members/page.jsx
   const exportToExcel = () => {
     const data = filteredMembers.map((m) => ({
       "Membership Number": m.membership_number,
@@ -270,8 +272,6 @@ export default function MembersPage() {
       ) : (
         <>
           {/* Members Grid */}
-
-          {/* Members Grid */}
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {paginated.map((member) => (
               <div
@@ -326,7 +326,6 @@ export default function MembersPage() {
                   </div>
                 </div>
 
-                {/* Rest of the card remains the same */}
                 <div className="p-6 space-y-4">
                   {(member.date_of_birth || member.gender) && (
                     <div className="flex items-center gap-4 text-sm pb-3 border-b border-gray-100">
@@ -371,10 +370,17 @@ export default function MembersPage() {
                     )}
                   </div>
 
-                  <div className="flex justify-end gap-3 pt-4 border-t">
+                  <div className="flex flex-wrap justify-end gap-2 pt-4 border-t">
+                    {/* <button
+                      onClick={() => setPrintCardMember(member)}
+                      className="text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Print Card
+                    </button> */}
                     <button
                       onClick={() => setViewMember(member)}
-                      className="text-green-600 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                      className="text-green-600 hover:bg-green-50 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
                     >
                       <Eye className="w-4 h-4" />
                       View
@@ -382,7 +388,7 @@ export default function MembersPage() {
                     {role === "admin" && (
                       <button
                         onClick={() => setEditMember(member)}
-                        className="text-green-600 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                        className="text-green-600 hover:bg-green-50 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
                       >
                         <Edit2 className="w-4 h-4" />
                         Edit
@@ -391,7 +397,7 @@ export default function MembersPage() {
                     {role === "super_user" && (
                       <button
                         onClick={() => setDeleteMemberModal(member)}
-                        className="text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
+                        className="text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
                       >
                         <Trash2 className="w-4 h-4" />
                         Delete
@@ -402,6 +408,7 @@ export default function MembersPage() {
               </div>
             ))}
           </div>
+
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-4">
@@ -440,6 +447,14 @@ export default function MembersPage() {
         <EditMemberModal
           member={editMember}
           onClose={() => setEditMember(null)}
+        />
+      )}
+
+      {/* Print Membership Card Modal */}
+      {printCardMember && (
+        <MembershipCardPrinter
+          member={printCardMember}
+          onClose={() => setPrintCardMember(null)}
         />
       )}
 
