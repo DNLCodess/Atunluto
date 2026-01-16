@@ -371,13 +371,13 @@ export default function MembersPage() {
                   </div>
 
                   <div className="flex flex-wrap justify-end gap-2 pt-4 border-t">
-                    {/* <button
+                    <button
                       onClick={() => setPrintCardMember(member)}
                       className="text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"
                     >
                       <CreditCard className="w-4 h-4" />
                       Print Card
-                    </button> */}
+                    </button>
                     <button
                       onClick={() => setViewMember(member)}
                       className="text-green-600 hover:bg-green-50 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition"

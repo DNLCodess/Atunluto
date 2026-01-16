@@ -173,7 +173,10 @@ export default function Sidebar() {
         {navItems.map((item, index) => {
           const isActive =
             pathname &&
-            (pathname === item.href || pathname.startsWith(item.href + "/"));
+            (item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname === item.href || pathname.startsWith(item.href + "/"));
+
           return (
             <Link
               key={item.name}
