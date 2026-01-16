@@ -497,7 +497,7 @@ function CallToAction() {
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
             <motion.a
-              href="/join"
+              href="/join-us"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="inline-flex items-center justify-center gap-2 bg-white text-[#1b5e20] px-8 py-4 rounded-xl font-poppins font-semibold shadow-lg hover:shadow-xl transition-shadow"
@@ -507,7 +507,7 @@ function CallToAction() {
             </motion.a>
 
             <motion.a
-              href="/manifestos"
+              href="/manifestoes"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 px-8 py-4 rounded-xl font-poppins font-semibold hover:bg-white/20 transition-colors"

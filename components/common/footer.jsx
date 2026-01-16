@@ -50,7 +50,7 @@ export default function Footer() {
               {[
                 { label: "About Us", href: "/about" },
                 { label: "Mission & Vision", href: "/mission" },
-                { label: "Manifesto", href: "/manifesto" },
+                { label: "Manifesto", href: "/manifestoes" },
                 { label: "Gallery", href: "/gallery" },
                 { label: "Join Us", href: "/register" },
               ].map((item, i) => (

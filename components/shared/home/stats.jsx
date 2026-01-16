@@ -148,7 +148,7 @@ export default function Stats() {
           >
             Be part of the movement transforming Oyo South
           </p>
-          <Link href="/join">
+          <Link href="/join-us">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}

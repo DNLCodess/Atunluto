@@ -124,7 +124,7 @@ export default function Hero() {
 
               {/* CTA Buttons */}
               <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row md:mt-20">
-                <Link href="/join" className="w-full sm:w-auto">
+                <Link href="/join-us" className="w-full sm:w-auto">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -137,7 +137,7 @@ export default function Hero() {
                   </motion.button>
                 </Link>
 
-                <Link href="/manifesto" className="w-full sm:w-auto">
+                <Link href="/manifestoes" className="w-full sm:w-auto">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}

@@ -142,7 +142,7 @@ export default function CTA() {
 
                 {/* CTA Buttons */}
                 <div className="space-y-3 pt-4">
-                  <Link href="/join" className="block">
+                  <Link href="/join-us" className="block">
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}

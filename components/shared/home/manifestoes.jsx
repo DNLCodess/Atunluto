@@ -163,7 +163,7 @@ export default function Manifestos() {
                   {manifesto.target}
                 </p>
                 <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Link href="/manifestos" prefetch>
+                  <Link href="/manifestoes" prefetch>
                     <span
                       className="inline-flex items-center gap-1 font-poppins text-xs font-semibold"
                       style={{ color: "#1b5e20" }}
@@ -239,7 +239,7 @@ export default function Manifestos() {
           transition={{ duration: 0.6, delay: 0.7 }}
           className="mt-16 text-center"
         >
-          <Link href="/manifestos" prefetch>
+          <Link href="/manifestoes" prefetch>
             <motion.button
               whileHover={{ backgroundColor: "#1b5e20", color: "#ffffff" }}
               className="font-poppins text-base font-semibold px-12 py-4 border-2 transition-all inline-flex items-center gap-3"

@@ -171,7 +171,7 @@ export default function ManifestosPage() {
                     Read Details
                   </motion.button>
                 </Link>
-                <Link href="/join">
+                <Link href="/join-us">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     className="w-full sm:w-auto px-8 py-4 rounded-lg border-2 font-poppins font-semibold"
@@ -383,7 +383,7 @@ export default function ManifestosPage() {
               Join us in implementing these development priorities across Oyo
               South
             </p>
-            <Link href="/join">
+            <Link href="/join-us">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 className="px-12 py-4 rounded-lg font-poppins font-semibold"

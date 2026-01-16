@@ -1,23 +1,8 @@
-import { Montserrat, Poppins } from "next/font/google";
 import "../globals.css";
 import ServiceWorkerRegistration from "@/components/common/service-worker-registration";
 import InstallPrompt from "@/components/common/installPrompt";
 import Navbar from "@/components/common/navbar";
 import Footer from "@/components/common/footer";
-
-const montserrat = Montserrat({
-  variable: "--font-montserrat",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"], // Regular to ExtraBold
-  display: "swap",
-});
-
-const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"], // Regular to ExtraBold
-  display: "swap",
-});
 
 export const metadata = {
   title: "Atunluto Group - Building Nigeria Together",
@@ -97,9 +82,7 @@ export default function UserLayout({ children }) {
         <link rel="site.webmanifest" href="/site.webmanifest" />
         <link rel="apple-touch-startup-image" href="/icons/icon-512x512.png" />
       </head>
-      <body
-        className={`${montserrat.variable} ${poppins.variable} antialiased`}
-      >
+      <body>
         <ServiceWorkerRegistration />
         <InstallPrompt />
         <Navbar />

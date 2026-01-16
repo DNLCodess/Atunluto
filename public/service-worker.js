@@ -8,7 +8,7 @@ const STATIC_CACHE_URLS = [
   "/offline",
   "/about",
   "/mission-vision",
-  "/manifestos",
+  "/manifestoes",
   "/achievements",
   "/gallery",
 ];

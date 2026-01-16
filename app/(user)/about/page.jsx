@@ -124,7 +124,7 @@ export default function AboutPage() {
               </div>
 
               <div className="mt-10 flex flex-col sm:flex-row gap-4">
-                <Link href="/join">
+                <Link href="/join-us">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     className="w-full sm:w-auto px-8 py-4 rounded-lg font-poppins font-semibold"
@@ -481,7 +481,7 @@ export default function AboutPage() {
               Start the journey with us towards rescuing Nigeria, one office at
               a time
             </p>
-            <Link href="/join">
+            <Link href="/join-us">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 className="px-12 py-4 rounded-lg font-poppins font-semibold"
