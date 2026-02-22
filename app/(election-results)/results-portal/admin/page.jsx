@@ -97,7 +97,7 @@ export default async function StateAdminDashboard() {
   const hasCritical = (criticalReports || []).length > 0;
 
   return (
-    <div className="font-sans text-gray-900">
+    <div className="font-sans text-gray-900 p-8">
       {/* Page header */}
       <div className="mb-8">
         <h1 className="font-montserrat text-2xl font-extrabold text-green-900 mb-1.5">

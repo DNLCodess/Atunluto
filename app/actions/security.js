@@ -5,12 +5,47 @@ import { getResultsSession } from "@/app/actions/election-auth";
 import { computeResultChecksum } from "@/utils/results-checksum";
 import { headers } from "next/headers";
 
+// ─────────────────────────────────────────
+// GET PRESIGNED UPLOAD URL
+// Called before submission — client uploads directly to Supabase Storage
+// ─────────────────────────────────────────
+
+export async function getEvidenceUploadUrl({ fileName, fileType, fileSize }) {
+  const session = await getResultsSession();
+  if (!session || session.role !== "lga_admin")
+    return { error: "Unauthorised." };
+
+  if (fileSize > 10 * 1024 * 1024)
+    return { error: "Evidence file must be under 10MB." };
+
+  const ALLOWED = ["image/jpeg", "image/png", "application/pdf"];
+  if (!ALLOWED.includes(fileType))
+    return { error: "Only JPEG, PNG, and PDF files are allowed." };
+
+  const ext = fileName.split(".").pop().toLowerCase();
+  const path = `security-evidence/${session.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase.storage
+    .from("security-evidence")
+    .createSignedUploadUrl(path);
+
+  if (error) return { error: "Failed to generate upload URL." };
+
+  return { uploadUrl: data.signedUrl, path, token: data.token };
+}
+
+// ─────────────────────────────────────────
+// FILE SECURITY REPORT
+// Receives storage path (already uploaded), not the file itself
+// ─────────────────────────────────────────
+
 export async function fileSecurityReport(payload) {
   const session = await getResultsSession();
   if (!session || session.role !== "lga_admin")
     return { error: "Unauthorised." };
 
-  const { report_type, urgency, description, evidenceFile } = payload;
+  const { report_type, urgency, description, evidencePath } = payload;
 
   if (!report_type) return { error: "Report type is required." };
   if (!urgency) return { error: "Urgency level is required." };
@@ -32,24 +67,13 @@ export async function fileSecurityReport(payload) {
 
   const supabase = createAdminClient();
 
+  // Generate a 7-day signed read URL from the already-uploaded path
   let evidence_url = null;
-  if (evidenceFile && evidenceFile.size > 0) {
-    if (evidenceFile.size > 10 * 1024 * 1024)
-      return { error: "Evidence file must be under 10MB." };
-    const ext = evidenceFile.name.split(".").pop().toLowerCase();
-    const filename = `security-evidence/${session.id}/${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage
+  if (evidencePath) {
+    const { data: urlData } = await supabase.storage
       .from("security-evidence")
-      .upload(filename, evidenceFile, {
-        contentType: evidenceFile.type,
-        upsert: false,
-      });
-    if (!uploadError) {
-      const { data: urlData } = await supabase.storage
-        .from("security-evidence")
-        .createSignedUrl(filename, 3600 * 24 * 7);
-      evidence_url = urlData?.signedUrl || null;
-    }
+      .createSignedUrl(evidencePath, 3600 * 24 * 7);
+    evidence_url = urlData?.signedUrl || null;
   }
 
   const { data, error } = await supabase
@@ -136,7 +160,6 @@ export async function runChecksumVerification(electionId) {
   if (!electionId) return { error: "Election ID required." };
 
   const supabase = createAdminClient();
-
   const { data: results, error } = await supabase
     .from("election_results")
     .select(

@@ -101,7 +101,7 @@ export default function AuditLogPage() {
   const hasFilters = action || table || adminId || dateFrom || dateTo;
 
   return (
-    <div className="font-[Poppins,sans-serif] text-text-dark">
+    <div className="font-[Poppins,sans-serif] text-text-dark p-8">
       {/* Header */}
       <div className="mb-7">
         <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] m-0 mb-1.5">

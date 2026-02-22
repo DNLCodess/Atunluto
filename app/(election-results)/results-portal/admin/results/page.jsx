@@ -3,13 +3,6 @@
 /**
  * app/results-portal/admin/results/page.jsx
  * State Admin — Full collation view.
- *
- * Sections:
- *   1. Election selector + summary stats
- *   2. Visual charts (bar + donut via Recharts)
- *   3. Collation table — LGA rows × candidate columns, grand total row
- *   4. Expandable ward/polling-unit breakdown per LGA
- *   5. Raw submissions list with verify/dispute controls + image viewer
  */
 
 import { useState, useMemo } from "react";
@@ -35,21 +28,6 @@ import {
   useUpdateResultStatus,
 } from "@/hooks/use-collation";
 
-// ─────────────────────────────────────────
-const C = {
-  primary: "#1B5E20",
-  secondary: "#2E7D32",
-  accent: "#4CAF50",
-  light: "#C8E6C9",
-  text: "#212121",
-  gray: "#757575",
-  border: "#E0E0E0",
-  bg: "#F5F5F5",
-  white: "#FFFFFF",
-  danger: "#C62828",
-  dangerBg: "#FFEBEE",
-};
-
 const VALID_LGAS = [
   "Ibadan North",
   "Ibadan North-East",
@@ -62,7 +40,6 @@ const VALID_LGAS = [
   "Ido",
 ];
 
-// Deterministic colours for up to 8 candidates
 const CANDIDATE_COLOURS = [
   "#1B5E20",
   "#1565C0",
@@ -75,9 +52,17 @@ const CANDIDATE_COLOURS = [
 ];
 
 const STATUS_CFG = {
-  pending: { label: "Pending", bg: "#E3F2FD", color: "#1565C0" },
-  verified: { label: "Verified", bg: "#E8F5E9", color: "#2E7D32" },
-  disputed: { label: "Disputed", bg: "#FFEBEE", color: "#C62828" },
+  pending: { label: "Pending", bg: "bg-blue-50", color: "text-blue-800" },
+  verified: { label: "Verified", bg: "bg-green-50", color: "text-green-800" },
+  disputed: { label: "Disputed", bg: "bg-red-50", color: "text-red-800" },
+};
+
+const PARTY_COLORS = {
+  APC: { text: "text-blue-800", bg: "bg-blue-50" },
+  PDP: { text: "text-red-800", bg: "bg-red-50" },
+  LP: { text: "text-yellow-800", bg: "bg-yellow-50" },
+  ADC: { text: "text-purple-800", bg: "bg-purple-50" },
+  NNPP: { text: "text-green-800", bg: "bg-green-50" },
 };
 
 // ─────────────────────────────────────────
@@ -88,9 +73,9 @@ export default function ResultsCollationPage() {
   const { data: elections = [], isLoading: loadingElections } = useElections();
 
   const [electionId, setElectionId] = useState("");
-  const [activeTab, setActiveTab] = useState("collation"); // collation | submissions
+  const [activeTab, setActiveTab] = useState("collation");
   const [expandedLGA, setExpandedLGA] = useState(null);
-  const [imageViewer, setImageViewer] = useState(null); // { url, submitter, submittedAt }
+  const [imageViewer, setImageViewer] = useState(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [lgaFilter, setLgaFilter] = useState("");
 
@@ -107,10 +92,8 @@ export default function ResultsCollationPage() {
   );
 
   const updateStatus = useUpdateResultStatus();
-
   const selectedElection = elections.find((e) => e.id === electionId);
 
-  // Build candidate list from totals (sorted by total votes desc)
   const candidates = useMemo(
     () =>
       totals.map((t, i) => ({
@@ -123,7 +106,6 @@ export default function ResultsCollationPage() {
     [totals],
   );
 
-  // Build collation matrix: { lga → { candidateId → votes } }
   const matrix = useMemo(() => {
     const m = {};
     VALID_LGAS.forEach((lga) => {
@@ -135,7 +117,6 @@ export default function ResultsCollationPage() {
     return m;
   }, [collated]);
 
-  // Grand totals per candidate
   const grandTotals = useMemo(() => {
     const gt = {};
     candidates.forEach((c) => {
@@ -144,21 +125,18 @@ export default function ResultsCollationPage() {
     return gt;
   }, [candidates]);
 
-  // Stats
   const totalSubmissions = allResults.length;
   const pendingCount = allResults.filter((r) => r.status === "pending").length;
   const disputedCount = allResults.filter(
     (r) => r.status === "disputed",
   ).length;
 
-  // Chart data for horizontal bar
   const barData = candidates.map((c) => ({
     name: `${c.name} (${c.party})`,
     votes: c.total || 0,
     color: c.color,
   }));
 
-  // LGA stacked bar data
   const lgaBarData = VALID_LGAS.map((lga) => {
     const row = {
       lga: lga.replace("Ibadan ", "Ibdn ").replace("Ibarapa ", "Ibrp "),
@@ -169,7 +147,6 @@ export default function ResultsCollationPage() {
     return row;
   });
 
-  // Donut data
   const donutData = candidates.map((c) => ({
     name: c.name,
     value: c.total || 0,
@@ -178,49 +155,21 @@ export default function ResultsCollationPage() {
   const grandTotal = candidates.reduce((s, c) => s + (c.total || 0), 0);
 
   return (
-    <div style={{ fontFamily: "Poppins, sans-serif", color: C.text }}>
+    <div className="p-8 font-[Poppins,sans-serif] text-[#212121]">
       {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "28px",
-        }}
-      >
+      <div className="flex justify-between items-start mb-7">
         <div>
-          <h1
-            style={{
-              fontFamily: "Montserrat, sans-serif",
-              fontSize: "26px",
-              fontWeight: 800,
-              color: C.primary,
-              margin: "0 0 6px",
-            }}
-          >
+          <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
             Result Collation
           </h1>
-          <p style={{ color: C.gray, fontSize: "14px", margin: 0 }}>
+          <p className="text-sm text-[#757575]">
             Aggregated election results across all 9 LGAs
           </p>
         </div>
         {selectedElection && (
           <button
             onClick={() => window.print()}
-            style={{
-              padding: "10px 20px",
-              background: C.bg,
-              border: `1.5px solid ${C.border}`,
-              borderRadius: "8px",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: "Poppins, sans-serif",
-              color: C.text,
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
+            className="flex items-center gap-1.5 px-5 py-2.5 bg-[#F5F5F5] hover:bg-[#EEEEEE] border border-[#E0E0E0] rounded-xl text-[13px] font-semibold text-[#212121] cursor-pointer transition-colors duration-150"
           >
             🖨️ Print / Export
           </button>
@@ -228,28 +177,12 @@ export default function ResultsCollationPage() {
       </div>
 
       {/* Election selector */}
-      <div
-        style={{
-          background: C.white,
-          borderRadius: "12px",
-          border: `1px solid ${C.border}`,
-          padding: "20px 24px",
-          marginBottom: "24px",
-        }}
-      >
-        <label
-          style={{
-            fontSize: "13px",
-            fontWeight: 600,
-            color: C.text,
-            display: "block",
-            marginBottom: "10px",
-          }}
-        >
+      <div className="bg-white rounded-xl border border-[#E0E0E0] px-6 py-5 mb-6">
+        <label className="block text-[13px] font-semibold text-[#212121] mb-2.5">
           Select Election to View
         </label>
         {loadingElections ? (
-          <Skeleton h={44} />
+          <Skeleton h="h-11" />
         ) : (
           <select
             value={electionId}
@@ -259,18 +192,7 @@ export default function ResultsCollationPage() {
               setStatusFilter("");
               setLgaFilter("");
             }}
-            style={{
-              width: "100%",
-              maxWidth: "480px",
-              padding: "11px 14px",
-              border: `1.5px solid ${C.border}`,
-              borderRadius: "8px",
-              fontSize: "14px",
-              fontFamily: "Poppins, sans-serif",
-              outline: "none",
-              background: C.white,
-              cursor: "pointer",
-            }}
+            className="w-full max-w-[480px] px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150 cursor-pointer"
           >
             <option value="">Choose an election...</option>
             {elections.map((e) => (
@@ -282,19 +204,11 @@ export default function ResultsCollationPage() {
         )}
       </div>
 
+      {/* Empty state */}
       {!electionId && (
-        <div
-          style={{
-            background: C.white,
-            borderRadius: "12px",
-            border: `1px dashed ${C.border}`,
-            padding: "80px",
-            textAlign: "center",
-            color: C.gray,
-          }}
-        >
-          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📊</div>
-          <div style={{ fontSize: "16px", fontWeight: 600 }}>
+        <div className="bg-white rounded-xl border border-dashed border-[#E0E0E0] py-20 text-center text-[#757575]">
+          <div className="text-5xl mb-4">📊</div>
+          <div className="text-base font-semibold">
             Select an election above to view collated results
           </div>
         </div>
@@ -303,80 +217,53 @@ export default function ResultsCollationPage() {
       {electionId && (
         <>
           {/* Summary stats */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: "14px",
-              marginBottom: "24px",
-            }}
-          >
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
             {[
               {
                 label: "Total Votes Cast",
                 value: grandTotal.toLocaleString(),
-                color: C.primary,
+                color: "text-[#1B5E20]",
               },
               {
                 label: "Submissions",
                 value: totalSubmissions,
-                color: "#1565C0",
+                color: "text-blue-800",
               },
               {
                 label: "Pending Review",
                 value: pendingCount,
-                color: "#E65100",
+                color: "text-orange-700",
               },
-              { label: "Disputed", value: disputedCount, color: C.danger },
+              {
+                label: "Disputed",
+                value: disputedCount,
+                color: "text-red-700",
+              },
             ].map(({ label, value, color }) => (
               <div
                 key={label}
-                style={{
-                  background: C.white,
-                  borderRadius: "12px",
-                  padding: "20px 22px",
-                  border: `1px solid ${C.border}`,
-                }}
+                className="bg-white rounded-xl px-5 py-5 border border-[#E0E0E0]"
               >
                 <div
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    color,
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
+                  className={`font-[Montserrat,sans-serif] text-3xl font-extrabold ${color}`}
                 >
                   {value}
                 </div>
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: C.gray,
-                    fontWeight: 600,
-                    marginTop: "4px",
-                  }}
-                >
+                <div className="text-xs text-[#757575] font-semibold mt-1">
                   {label}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Leading candidate banner */}
+          {/* Leading banner */}
           {candidates.length > 0 && grandTotal > 0 && (
             <LeadingBanner candidates={candidates} grandTotal={grandTotal} />
           )}
 
           {/* Charts */}
           {candidates.length > 0 && grandTotal > 0 && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 380px",
-                gap: "20px",
-                marginBottom: "24px",
-              }}
-            >
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 mb-6">
               <CandidateBarChart barData={barData} />
               <DonutChart donutData={donutData} grandTotal={grandTotal} />
             </div>
@@ -388,17 +275,7 @@ export default function ResultsCollationPage() {
           )}
 
           {/* Tabs */}
-          <div
-            style={{
-              display: "flex",
-              gap: "4px",
-              marginBottom: "20px",
-              background: C.bg,
-              borderRadius: "10px",
-              padding: "4px",
-              width: "fit-content",
-            }}
-          >
+          <div className="flex gap-1 mb-5 bg-[#F5F5F5] rounded-xl p-1 w-fit">
             {[
               { key: "collation", label: "📋 Collation Table" },
               { key: "submissions", label: "📝 Raw Submissions" },
@@ -406,27 +283,18 @@ export default function ResultsCollationPage() {
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
-                style={{
-                  padding: "9px 20px",
-                  background: activeTab === key ? C.white : "transparent",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontWeight: activeTab === key ? 700 : 500,
-                  color: activeTab === key ? C.primary : C.gray,
-                  cursor: "pointer",
-                  fontFamily: "Poppins, sans-serif",
-                  boxShadow:
-                    activeTab === key ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
-                  transition: "all 0.15s",
-                }}
+                className={`px-5 py-2.5 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all duration-150
+                  ${
+                    activeTab === key
+                      ? "bg-white text-[#1B5E20] font-bold shadow-sm"
+                      : "bg-transparent text-[#757575] hover:text-[#212121]"
+                  }`}
               >
                 {label}
               </button>
             ))}
           </div>
 
-          {/* COLLATION TABLE */}
           {activeTab === "collation" && (
             <CollationTable
               candidates={candidates}
@@ -444,7 +312,6 @@ export default function ResultsCollationPage() {
             />
           )}
 
-          {/* RAW SUBMISSIONS */}
           {activeTab === "submissions" && (
             <SubmissionsList
               results={allResults}
@@ -463,7 +330,6 @@ export default function ResultsCollationPage() {
         </>
       )}
 
-      {/* Image Viewer Lightbox */}
       {imageViewer && (
         <ImageViewer
           url={imageViewer.url}
@@ -485,74 +351,43 @@ function LeadingBanner({ candidates, grandTotal }) {
   const leader = candidates[0];
   const pct =
     grandTotal > 0 ? ((leader.total / grandTotal) * 100).toFixed(1) : 0;
+
   return (
     <div
+      className="flex items-center gap-5 rounded-xl px-6 py-4 mb-6 border-[1.5px]"
       style={{
-        background: `linear-gradient(135deg, ${leader.color}15, ${leader.color}05)`,
-        border: `1.5px solid ${leader.color}30`,
-        borderRadius: "12px",
-        padding: "16px 24px",
-        marginBottom: "24px",
-        display: "flex",
-        alignItems: "center",
-        gap: "20px",
+        background: `${leader.color}10`,
+        borderColor: `${leader.color}30`,
       }}
     >
       <div
-        style={{
-          width: "48px",
-          height: "48px",
-          borderRadius: "50%",
-          background: leader.color,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          fontSize: "18px",
-          fontWeight: 800,
-          flexShrink: 0,
-        }}
+        className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-extrabold shrink-0"
+        style={{ background: leader.color }}
       >
         {leader.name.charAt(0)}
       </div>
-      <div style={{ flex: 1 }}>
-        <div
-          style={{
-            fontSize: "11px",
-            color: C.gray,
-            fontWeight: 600,
-            letterSpacing: "0.8px",
-            textTransform: "uppercase",
-          }}
-        >
+      <div className="flex-1 min-w-0">
+        <div className="text-[11px] text-[#757575] font-bold tracking-widest uppercase mb-0.5">
           Current Leader
         </div>
         <div
-          style={{
-            fontSize: "18px",
-            fontWeight: 800,
-            color: leader.color,
-            fontFamily: "Montserrat, sans-serif",
-          }}
+          className="font-[Montserrat,sans-serif] text-lg font-extrabold"
+          style={{ color: leader.color }}
         >
           {leader.name}{" "}
-          <span style={{ fontSize: "14px", fontWeight: 600, color: C.gray }}>
+          <span className="text-sm font-semibold text-[#757575]">
             ({leader.party})
           </span>
         </div>
       </div>
-      <div style={{ textAlign: "right" }}>
+      <div className="text-right shrink-0">
         <div
-          style={{
-            fontSize: "28px",
-            fontWeight: 800,
-            color: leader.color,
-            fontFamily: "Montserrat, sans-serif",
-          }}
+          className="font-[Montserrat,sans-serif] text-3xl font-extrabold"
+          style={{ color: leader.color }}
         >
           {leader.total.toLocaleString()}
         </div>
-        <div style={{ fontSize: "14px", color: C.gray, fontWeight: 600 }}>
+        <div className="text-sm text-[#757575] font-semibold">
           {pct}% of votes
         </div>
       </div>
@@ -566,23 +401,8 @@ function LeadingBanner({ candidates, grandTotal }) {
 
 function CandidateBarChart({ barData }) {
   return (
-    <div
-      style={{
-        background: C.white,
-        borderRadius: "12px",
-        border: `1px solid ${C.border}`,
-        padding: "24px",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "Montserrat, sans-serif",
-          fontSize: "15px",
-          fontWeight: 700,
-          color: C.primary,
-          marginBottom: "20px",
-        }}
-      >
+    <div className="bg-white rounded-xl border border-[#E0E0E0] p-6">
+      <div className="font-[Montserrat,sans-serif] text-[15px] font-bold text-[#1B5E20] mb-5">
         Votes by Candidate
       </div>
       <ResponsiveContainer
@@ -597,24 +417,24 @@ function CandidateBarChart({ barData }) {
           <CartesianGrid
             strokeDasharray="3 3"
             horizontal={false}
-            stroke={C.border}
+            stroke="#E0E0E0"
           />
           <XAxis
             type="number"
-            tick={{ fontSize: 11, fill: C.gray }}
+            tick={{ fontSize: 11, fill: "#757575" }}
             tickFormatter={(v) => v.toLocaleString()}
           />
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fontSize: 12, fill: C.text }}
+            tick={{ fontSize: 12, fill: "#212121" }}
             width={160}
           />
           <Tooltip
             formatter={(v) => [v.toLocaleString(), "Votes"]}
             contentStyle={{
               borderRadius: "8px",
-              border: `1px solid ${C.border}`,
+              border: "1px solid #E0E0E0",
               fontFamily: "Poppins, sans-serif",
               fontSize: "13px",
             }}
@@ -641,28 +461,11 @@ function DonutChart({ donutData, grandTotal }) {
     grandTotal > 0 ? ((displayed?.value / grandTotal) * 100).toFixed(1) : 0;
 
   return (
-    <div
-      style={{
-        background: C.white,
-        borderRadius: "12px",
-        border: `1px solid ${C.border}`,
-        padding: "24px",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "Montserrat, sans-serif",
-          fontSize: "15px",
-          fontWeight: 700,
-          color: C.primary,
-          marginBottom: "20px",
-        }}
-      >
+    <div className="bg-white rounded-xl border border-[#E0E0E0] p-6 flex flex-col">
+      <div className="font-[Montserrat,sans-serif] text-[15px] font-bold text-[#1B5E20] mb-5">
         Vote Share
       </div>
-      <div style={{ position: "relative", flex: 1 }}>
+      <div className="relative flex-1">
         <ResponsiveContainer width="100%" height={200}>
           <PieChart>
             <Pie
@@ -677,72 +480,39 @@ function DonutChart({ donutData, grandTotal }) {
               strokeWidth={2}
             >
               {donutData.map((entry, i) => (
-                <Cell key={i} fill={entry.color} stroke={C.white} />
+                <Cell key={i} fill={entry.color} stroke="#fff" />
               ))}
             </Pie>
           </PieChart>
         </ResponsiveContainer>
         {/* Centre label */}
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            textAlign: "center",
-            pointerEvents: "none",
-          }}
-        >
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
           <div
-            style={{
-              fontSize: "22px",
-              fontWeight: 800,
-              color: displayed?.color,
-              fontFamily: "Montserrat, sans-serif",
-            }}
+            className="font-[Montserrat,sans-serif] text-[22px] font-extrabold"
+            style={{ color: displayed?.color }}
           >
             {pct}%
           </div>
-          <div
-            style={{
-              fontSize: "11px",
-              color: C.gray,
-              fontWeight: 600,
-              maxWidth: "80px",
-              lineHeight: 1.3,
-            }}
-          >
+          <div className="text-[11px] text-[#757575] font-semibold max-w-[80px] leading-tight">
             {displayed?.name}
           </div>
         </div>
       </div>
       {/* Legend */}
-      <div style={{ marginTop: "12px" }}>
+      <div className="mt-3">
         {donutData.map((d) => (
           <div
             key={d.name}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "5px 0",
-              borderBottom: `1px solid ${C.border}`,
-              fontSize: "12px",
-            }}
+            className="flex justify-between items-center py-1.5 border-b border-[#E0E0E0] text-xs"
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div className="flex items-center gap-1.5">
               <div
-                style={{
-                  width: "10px",
-                  height: "10px",
-                  borderRadius: "2px",
-                  background: d.color,
-                  flexShrink: 0,
-                }}
+                className="w-2.5 h-2.5 rounded-sm shrink-0"
+                style={{ background: d.color }}
               />
-              <span style={{ color: C.text, fontWeight: 500 }}>{d.name}</span>
+              <span className="text-[#212121] font-medium">{d.name}</span>
             </div>
-            <span style={{ fontWeight: 700, color: d.color }}>
+            <span className="font-bold" style={{ color: d.color }}>
               {d.value.toLocaleString()}
             </span>
           </div>
@@ -758,24 +528,8 @@ function DonutChart({ donutData, grandTotal }) {
 
 function LGAStackedBar({ lgaBarData, candidates }) {
   return (
-    <div
-      style={{
-        background: C.white,
-        borderRadius: "12px",
-        border: `1px solid ${C.border}`,
-        padding: "24px",
-        marginBottom: "24px",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "Montserrat, sans-serif",
-          fontSize: "15px",
-          fontWeight: 700,
-          color: C.primary,
-          marginBottom: "20px",
-        }}
-      >
+    <div className="bg-white rounded-xl border border-[#E0E0E0] p-6 mb-6">
+      <div className="font-[Montserrat,sans-serif] text-[15px] font-bold text-[#1B5E20] mb-5">
         Candidate Performance by LGA
       </div>
       <ResponsiveContainer width="100%" height={280}>
@@ -786,17 +540,17 @@ function LGAStackedBar({ lgaBarData, candidates }) {
           <CartesianGrid
             strokeDasharray="3 3"
             vertical={false}
-            stroke={C.border}
+            stroke="#E0E0E0"
           />
           <XAxis
             dataKey="lga"
-            tick={{ fontSize: 10, fill: C.gray }}
+            tick={{ fontSize: 10, fill: "#757575" }}
             angle={-30}
             textAnchor="end"
             interval={0}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: C.gray }}
+            tick={{ fontSize: 11, fill: "#757575" }}
             tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
           />
           <Tooltip
@@ -806,7 +560,7 @@ function LGAStackedBar({ lgaBarData, candidates }) {
             ]}
             contentStyle={{
               borderRadius: "8px",
-              border: `1px solid ${C.border}`,
+              border: "1px solid #E0E0E0",
               fontFamily: "Poppins, sans-serif",
               fontSize: "12px",
             }}
@@ -843,105 +597,47 @@ function CollationTable({
 }) {
   if (loadingCollated)
     return (
-      <div
-        style={{
-          background: C.white,
-          borderRadius: "12px",
-          border: `1px solid ${C.border}`,
-          padding: "32px",
-        }}
-      >
-        <Skeleton h={300} />
+      <div className="bg-white rounded-xl border border-[#E0E0E0] p-8">
+        <Skeleton h="h-72" />
       </div>
     );
 
   if (candidates.length === 0)
     return (
-      <div
-        style={{
-          background: C.white,
-          borderRadius: "12px",
-          border: `1px dashed ${C.border}`,
-          padding: "60px",
-          textAlign: "center",
-          color: C.gray,
-        }}
-      >
-        <div style={{ fontSize: "36px", marginBottom: "12px" }}>📋</div>
-        <div style={{ fontSize: "14px", fontWeight: 600 }}>
+      <div className="bg-white rounded-xl border border-dashed border-[#E0E0E0] py-16 text-center text-[#757575]">
+        <div className="text-4xl mb-3">📋</div>
+        <div className="text-sm font-semibold">
           No results submitted yet for this election
         </div>
       </div>
     );
 
   return (
-    <div
-      style={{
-        background: C.white,
-        borderRadius: "12px",
-        border: `1px solid ${C.border}`,
-        overflow: "hidden",
-        marginBottom: "24px",
-      }}
-    >
-      <div style={{ overflowX: "auto" }}>
+    <div className="bg-white rounded-xl border border-[#E0E0E0] overflow-hidden mb-6">
+      <div className="overflow-x-auto">
         <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            minWidth: `${300 + candidates.length * 140}px`,
-          }}
+          className="w-full border-collapse"
+          style={{ minWidth: `${300 + candidates.length * 140}px` }}
         >
           <thead>
-            <tr style={{ background: C.primary }}>
-              <th
-                style={{
-                  ...thStyle,
-                  textAlign: "left",
-                  width: "180px",
-                  position: "sticky",
-                  left: 0,
-                  background: C.primary,
-                  zIndex: 2,
-                }}
-              >
+            <tr className="bg-[#1B5E20]">
+              <th className="sticky left-0 z-20 bg-[#1B5E20] px-4 py-3.5 text-left text-xs font-bold text-white tracking-wide w-[180px]">
                 LGA
               </th>
               {candidates.map((c) => (
                 <th
                   key={c.id}
-                  style={{
-                    ...thStyle,
-                    borderLeft: `1px solid rgba(255,255,255,0.15)`,
-                  }}
+                  className="px-4 py-3.5 text-center text-white border-l border-white/15"
                 >
-                  <div style={{ fontSize: "12px", fontWeight: 700 }}>
-                    {c.name}
-                  </div>
+                  <div className="text-xs font-bold">{c.name}</div>
+                  <div className="text-[10px] opacity-75 mt-0.5">{c.party}</div>
                   <div
-                    style={{ fontSize: "10px", opacity: 0.8, marginTop: "2px" }}
-                  >
-                    {c.party}
-                  </div>
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: c.color,
-                      margin: "4px auto 0",
-                      border: "1px solid rgba(255,255,255,0.4)",
-                    }}
+                    className="w-2 h-2 rounded-full mx-auto mt-1 border border-white/40"
+                    style={{ background: c.color }}
                   />
                 </th>
               ))}
-              <th
-                style={{
-                  ...thStyle,
-                  borderLeft: `1px solid rgba(255,255,255,0.25)`,
-                  background: "rgba(0,0,0,0.2)",
-                }}
-              >
+              <th className="px-4 py-3.5 text-center text-white border-l border-white/25 bg-black/20 text-xs font-bold">
                 Total
               </th>
             </tr>
@@ -958,49 +654,15 @@ function CollationTable({
                   <tr
                     key={lga}
                     onClick={() => lgaTotal > 0 && onToggleLGA(lga)}
-                    style={{
-                      background: i % 2 === 0 ? C.white : "#FAFAFA",
-                      cursor: lgaTotal > 0 ? "pointer" : "default",
-                      borderBottom: `1px solid ${C.border}`,
-                      transition: "background 0.15s",
-                    }}
-                    onMouseEnter={(e) =>
-                      lgaTotal > 0 &&
-                      (e.currentTarget.style.background = "#F1F8E9")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background =
-                        i % 2 === 0 ? C.white : "#FAFAFA")
-                    }
+                    className={`border-b border-[#E0E0E0] transition-colors duration-150
+                      ${i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}
+                      ${lgaTotal > 0 ? "cursor-pointer hover:bg-green-50" : "cursor-default"}`}
                   >
-                    <td
-                      style={{
-                        ...tdStyle,
-                        fontWeight: 600,
-                        position: "sticky",
-                        left: 0,
-                        background: "inherit",
-                        zIndex: 1,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
+                    <td className="sticky left-0 z-10 bg-inherit px-4 py-3 text-sm font-semibold text-[#212121]">
+                      <div className="flex items-center gap-2">
                         {lgaTotal > 0 && (
                           <span
-                            style={{
-                              fontSize: "12px",
-                              color: C.gray,
-                              transition: "transform 0.2s",
-                              display: "inline-block",
-                              transform: isExpanded
-                                ? "rotate(90deg)"
-                                : "rotate(0deg)",
-                            }}
+                            className={`text-xs text-[#757575] transition-transform duration-200 inline-block ${isExpanded ? "rotate-90" : "rotate-0"}`}
                           >
                             ▶
                           </span>
@@ -1015,58 +677,39 @@ function CollationTable({
                           ? ((votes / lgaTotal) * 100).toFixed(1)
                           : 0;
                       return (
-                        <td
-                          key={c.id}
-                          style={{ ...tdStyle, textAlign: "center" }}
-                        >
+                        <td key={c.id} className="px-4 py-3 text-center">
                           {votes > 0 ? (
                             <>
                               <div
-                                style={{
-                                  fontWeight: 700,
-                                  fontSize: "15px",
-                                  color: c.color,
-                                  fontFamily: "Montserrat, sans-serif",
-                                }}
+                                className="font-[Montserrat,sans-serif] text-[15px] font-bold"
+                                style={{ color: c.color }}
                               >
                                 {votes.toLocaleString()}
                               </div>
-                              <div style={{ fontSize: "10px", color: C.gray }}>
+                              <div className="text-[10px] text-[#757575]">
                                 {lgaPct}%
                               </div>
                             </>
                           ) : (
-                            <span
-                              style={{ color: "#BDBDBD", fontSize: "13px" }}
-                            >
-                              —
-                            </span>
+                            <span className="text-[#BDBDBD] text-sm">—</span>
                           )}
                         </td>
                       );
                     })}
-                    <td
-                      style={{
-                        ...tdStyle,
-                        textAlign: "center",
-                        fontWeight: 700,
-                        background: "#F5F5F5",
-                      }}
-                    >
+                    <td className="px-4 py-3 text-center bg-[#F5F5F5] text-sm font-bold text-[#212121]">
                       {lgaTotal > 0 ? (
                         lgaTotal.toLocaleString()
                       ) : (
-                        <span style={{ color: "#BDBDBD" }}>—</span>
+                        <span className="text-[#BDBDBD]">—</span>
                       )}
                     </td>
                   </tr>
 
-                  {/* Expanded ward breakdown */}
                   {isExpanded && (
                     <tr key={`${lga}-expand`}>
                       <td
                         colSpan={candidates.length + 2}
-                        style={{ padding: 0, background: "#F9FBF9" }}
+                        className="p-0 bg-[#F9FBF9]"
                       >
                         <WardBreakdownInline
                           electionId={electionId}
@@ -1082,24 +725,8 @@ function CollationTable({
             })}
 
             {/* Grand total row */}
-            <tr
-              style={{
-                background: C.primary,
-                borderTop: `2px solid ${C.secondary}`,
-              }}
-            >
-              <td
-                style={{
-                  ...tdStyle,
-                  color: "#fff",
-                  fontWeight: 800,
-                  fontSize: "13px",
-                  position: "sticky",
-                  left: 0,
-                  background: C.primary,
-                  zIndex: 1,
-                }}
-              >
+            <tr className="bg-[#1B5E20] border-t-2 border-[#2E7D32]">
+              <td className="sticky left-0 z-10 bg-[#1B5E20] px-4 py-3.5 text-white font-extrabold text-[13px] tracking-wide">
                 GRAND TOTAL
               </td>
               {candidates.map((c) => {
@@ -1107,54 +734,22 @@ function CollationTable({
                 const pct =
                   grandTotal > 0 ? ((total / grandTotal) * 100).toFixed(1) : 0;
                 return (
-                  <td key={c.id} style={{ ...tdStyle, textAlign: "center" }}>
-                    <div
-                      style={{
-                        fontWeight: 800,
-                        fontSize: "16px",
-                        color: "#fff",
-                        fontFamily: "Montserrat, sans-serif",
-                      }}
-                    >
+                  <td key={c.id} className="px-4 py-3.5 text-center">
+                    <div className="font-[Montserrat,sans-serif] text-base font-extrabold text-white">
                       {total.toLocaleString()}
                     </div>
-                    <div
-                      style={{
-                        fontSize: "10px",
-                        color: "rgba(255,255,255,0.7)",
-                      }}
-                    >
-                      {pct}%
-                    </div>
+                    <div className="text-[10px] text-white/70">{pct}%</div>
                   </td>
                 );
               })}
-              <td
-                style={{
-                  ...tdStyle,
-                  textAlign: "center",
-                  color: "#fff",
-                  fontWeight: 800,
-                  fontSize: "16px",
-                  fontFamily: "Montserrat, sans-serif",
-                  background: "rgba(0,0,0,0.2)",
-                }}
-              >
+              <td className="px-4 py-3.5 text-center bg-black/20 font-[Montserrat,sans-serif] text-base font-extrabold text-white">
                 {grandTotal.toLocaleString()}
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div
-        style={{
-          padding: "10px 16px",
-          fontSize: "11px",
-          color: C.gray,
-          borderTop: `1px solid ${C.border}`,
-          background: C.bg,
-        }}
-      >
+      <div className="px-4 py-2.5 text-[11px] text-[#757575] border-t border-[#E0E0E0] bg-[#F5F5F5]">
         Click any LGA row to expand ward-level breakdown · Soft-deleted results
         excluded
       </div>
@@ -1163,7 +758,7 @@ function CollationTable({
 }
 
 // ─────────────────────────────────────────
-// WARD BREAKDOWN (inline expanded row)
+// WARD BREAKDOWN
 // ─────────────────────────────────────────
 
 function WardBreakdownInline({ electionId, lga, candidates, onViewImage }) {
@@ -1171,12 +766,11 @@ function WardBreakdownInline({ electionId, lga, candidates, onViewImage }) {
 
   if (isLoading)
     return (
-      <div style={{ padding: "20px 32px" }}>
-        <Skeleton h={80} />
+      <div className="px-8 py-5">
+        <Skeleton h="h-20" />
       </div>
     );
 
-  // Group by ward then polling unit
   const byWard = {};
   entries.forEach((e) => {
     if (!byWard[e.ward]) byWard[e.ward] = {};
@@ -1185,34 +779,13 @@ function WardBreakdownInline({ electionId, lga, candidates, onViewImage }) {
   });
 
   return (
-    <div
-      style={{ padding: "12px 32px 20px", borderTop: `1px solid ${C.light}` }}
-    >
-      <div
-        style={{
-          fontSize: "12px",
-          fontWeight: 700,
-          color: C.primary,
-          marginBottom: "12px",
-          textTransform: "uppercase",
-          letterSpacing: "0.8px",
-        }}
-      >
+    <div className="px-8 pt-3 pb-5 border-t border-[#C8E6C9]">
+      <div className="text-xs font-bold text-[#1B5E20] mb-3 tracking-widest uppercase">
         {lga} — Ward Breakdown
       </div>
       {Object.entries(byWard).map(([ward, pus]) => (
-        <div key={ward} style={{ marginBottom: "16px" }}>
-          <div
-            style={{
-              fontSize: "13px",
-              fontWeight: 700,
-              color: C.secondary,
-              marginBottom: "6px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
+        <div key={ward} className="mb-4">
+          <div className="flex items-center gap-2 text-[13px] font-bold text-[#2E7D32] mb-1.5">
             <span>📍</span> {ward}
           </div>
           {Object.entries(pus).map(([pu, puEntries]) => {
@@ -1223,47 +796,20 @@ function WardBreakdownInline({ electionId, lga, candidates, onViewImage }) {
             return (
               <div
                 key={pu}
-                style={{
-                  marginLeft: "20px",
-                  marginBottom: "8px",
-                  padding: "10px 14px",
-                  background: C.white,
-                  borderRadius: "8px",
-                  border: `1px solid ${C.border}`,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  flexWrap: "wrap",
-                }}
+                className="ml-5 mb-2 px-3.5 py-2.5 bg-white rounded-xl border border-[#E0E0E0] flex items-center gap-3 flex-wrap"
               >
-                <div style={{ flex: 1, minWidth: "140px" }}>
-                  <div
-                    style={{ fontSize: "13px", fontWeight: 600, color: C.text }}
-                  >
+                <div className="flex-1 min-w-[140px]">
+                  <div className="text-[13px] font-semibold text-[#212121]">
                     {pu}
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "6px",
-                      marginTop: "3px",
-                      flexWrap: "wrap",
-                    }}
-                  >
+                  <div className="flex gap-1.5 mt-1 flex-wrap">
                     <span
-                      style={{
-                        background: statusCfg.bg,
-                        color: statusCfg.color,
-                        padding: "1px 6px",
-                        borderRadius: "12px",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                      }}
+                      className={`${statusCfg.bg} ${statusCfg.color} px-2 py-0.5 rounded-full text-[10px] font-bold`}
                     >
                       {statusCfg.label}
                     </span>
                     {puEntries[0]?.submitter?.full_name && (
-                      <span style={{ fontSize: "10px", color: C.gray }}>
+                      <span className="text-[10px] text-[#757575]">
                         by {puEntries[0].submitter.full_name}
                       </span>
                     )}
@@ -1272,38 +818,24 @@ function WardBreakdownInline({ electionId, lga, candidates, onViewImage }) {
                 {candidates.map((c) => {
                   const entry = puEntries.find((e) => e.candidate?.id === c.id);
                   return (
-                    <div
-                      key={c.id}
-                      style={{ textAlign: "center", minWidth: "60px" }}
-                    >
+                    <div key={c.id} className="text-center min-w-[60px]">
                       <div
-                        style={{
-                          fontSize: "15px",
-                          fontWeight: 700,
-                          color: c.color,
-                          fontFamily: "Montserrat, sans-serif",
-                        }}
+                        className="font-[Montserrat,sans-serif] text-[15px] font-bold"
+                        style={{ color: c.color }}
                       >
                         {(entry?.votes_cast || 0).toLocaleString()}
                       </div>
-                      <div style={{ fontSize: "10px", color: C.gray }}>
+                      <div className="text-[10px] text-[#757575]">
                         {c.party}
                       </div>
                     </div>
                   );
                 })}
-                <div style={{ textAlign: "center", minWidth: "60px" }}>
-                  <div
-                    style={{
-                      fontSize: "15px",
-                      fontWeight: 700,
-                      color: C.text,
-                      fontFamily: "Montserrat, sans-serif",
-                    }}
-                  >
+                <div className="text-center min-w-[60px]">
+                  <div className="font-[Montserrat,sans-serif] text-[15px] font-bold text-[#212121]">
                     {puTotal.toLocaleString()}
                   </div>
-                  <div style={{ fontSize: "10px", color: C.gray }}>Total</div>
+                  <div className="text-[10px] text-[#757575]">Total</div>
                 </div>
                 {hasImage && (
                   <button
@@ -1315,17 +847,7 @@ function WardBreakdownInline({ electionId, lga, candidates, onViewImage }) {
                         pollingUnit: pu,
                       })
                     }
-                    style={{
-                      padding: "6px 12px",
-                      background: "#E8F5E9",
-                      border: `1px solid ${C.light}`,
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: C.primary,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
+                    className="px-3 py-1.5 bg-green-50 hover:bg-green-100 border border-[#C8E6C9] rounded-lg text-xs font-semibold text-[#1B5E20] cursor-pointer transition-colors duration-150 whitespace-nowrap"
                   >
                     📄 View Sheet
                   </button>
@@ -1340,7 +862,7 @@ function WardBreakdownInline({ electionId, lga, candidates, onViewImage }) {
 }
 
 // ─────────────────────────────────────────
-// SUBMISSIONS LIST (raw entries tab)
+// SUBMISSIONS LIST
 // ─────────────────────────────────────────
 
 function SubmissionsList({
@@ -1354,28 +876,14 @@ function SubmissionsList({
   onUpdateStatus,
   onViewImage,
 }) {
-  const updateStatus = useUpdateResultStatus();
-
   return (
     <div>
       {/* Filters */}
-      <div
-        style={{
-          background: C.white,
-          borderRadius: "10px",
-          border: `1px solid ${C.border}`,
-          padding: "14px 20px",
-          marginBottom: "16px",
-          display: "flex",
-          gap: "12px",
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
+      <div className="bg-white rounded-xl border border-[#E0E0E0] px-5 py-3.5 mb-4 flex gap-3 flex-wrap items-center">
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilter(e.target.value)}
-          style={miniSelectStyle}
+          className="px-3 py-2 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none focus:border-[#1B5E20] cursor-pointer transition-colors duration-150"
         >
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
@@ -1385,7 +893,7 @@ function SubmissionsList({
         <select
           value={lgaFilter}
           onChange={(e) => onLGAFilter(e.target.value)}
-          style={miniSelectStyle}
+          className="px-3 py-2 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none focus:border-[#1B5E20] cursor-pointer transition-colors duration-150"
         >
           <option value="">All LGAs</option>
           {VALID_LGAS.map((l) => (
@@ -1394,212 +902,128 @@ function SubmissionsList({
             </option>
           ))}
         </select>
-        <div style={{ fontSize: "13px", color: C.gray, marginLeft: "auto" }}>
+        <div className="text-[13px] text-[#757575] ml-auto">
           {results.length} result{results.length !== 1 ? "s" : ""}
         </div>
       </div>
 
       {loading ? (
-        <div
-          style={{
-            background: C.white,
-            borderRadius: "12px",
-            border: `1px solid ${C.border}`,
-            padding: "24px",
-          }}
-        >
+        <div className="bg-white rounded-xl border border-[#E0E0E0] p-6 space-y-2">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} h={60} mb={8} />
+            <Skeleton key={i} h="h-14" />
           ))}
         </div>
       ) : results.length === 0 ? (
-        <div
-          style={{
-            background: C.white,
-            borderRadius: "12px",
-            border: `1px dashed ${C.border}`,
-            padding: "60px",
-            textAlign: "center",
-            color: C.gray,
-          }}
-        >
-          <div style={{ fontSize: "32px", marginBottom: "12px" }}>📭</div>
-          <div style={{ fontSize: "14px", fontWeight: 600 }}>
+        <div className="bg-white rounded-xl border border-dashed border-[#E0E0E0] py-16 text-center text-[#757575]">
+          <div className="text-4xl mb-3">📭</div>
+          <div className="text-sm font-semibold">
             No submissions match your filters
           </div>
         </div>
       ) : (
-        <div
-          style={{
-            background: C.white,
-            borderRadius: "12px",
-            border: `1px solid ${C.border}`,
-            overflow: "hidden",
-          }}
-        >
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr
-                style={{
-                  background: C.bg,
-                  borderBottom: `2px solid ${C.border}`,
-                }}
-              >
-                {[
-                  "Polling Unit",
-                  "Candidate",
-                  "Votes",
-                  "Accredited",
-                  "Status",
-                  "Submitted By",
-                  "Actions",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: "11px 14px",
-                      textAlign: "left",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      color: C.gray,
-                      letterSpacing: "0.8px",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {results.map((r, i) => {
-                const cfg = STATUS_CFG[r.status] || STATUS_CFG.pending;
-                return (
-                  <tr
-                    key={r.id}
-                    style={{
-                      background: i % 2 === 0 ? C.white : "#FAFAFA",
-                      borderBottom: `1px solid ${C.border}`,
-                    }}
-                  >
-                    <td style={{ padding: "12px 14px" }}>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          color: C.text,
-                        }}
-                      >
-                        {r.polling_unit}
-                      </div>
-                      <div style={{ fontSize: "11px", color: C.gray }}>
-                        {r.ward} · {r.lga}
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          color: C.text,
-                        }}
-                      >
-                        {r.candidate?.full_name}
-                      </div>
-                      <div style={{ fontSize: "11px" }}>
+        <div className="bg-white rounded-xl border border-[#E0E0E0] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-[#F5F5F5] border-b-2 border-[#E0E0E0]">
+                  {[
+                    "Polling Unit",
+                    "Candidate",
+                    "Votes",
+                    "Accredited",
+                    "Status",
+                    "Submitted By",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="px-3.5 py-3 text-left text-[11px] font-bold text-[#757575] tracking-widest uppercase whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((r, i) => {
+                  const cfg = STATUS_CFG[r.status] || STATUS_CFG.pending;
+                  return (
+                    <tr
+                      key={r.id}
+                      className={`border-b border-[#E0E0E0] ${i % 2 === 0 ? "bg-white" : "bg-[#FAFAFA]"}`}
+                    >
+                      <td className="px-3.5 py-3">
+                        <div className="text-[13px] font-semibold text-[#212121]">
+                          {r.polling_unit}
+                        </div>
+                        <div className="text-[11px] text-[#757575]">
+                          {r.ward} · {r.lga}
+                        </div>
+                      </td>
+                      <td className="px-3.5 py-3">
+                        <div className="text-[13px] font-semibold text-[#212121]">
+                          {r.candidate?.full_name}
+                        </div>
                         <PartyChip party={r.candidate?.party} />
-                      </div>
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        fontSize: "16px",
-                        fontWeight: 800,
-                        color: C.primary,
-                        fontFamily: "Montserrat, sans-serif",
-                      }}
-                    >
-                      {r.votes_cast.toLocaleString()}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        fontSize: "13px",
-                        color: C.gray,
-                      }}
-                    >
-                      {r.accredited_voters?.toLocaleString()}
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <span
-                        style={{
-                          background: cfg.bg,
-                          color: cfg.color,
-                          padding: "3px 8px",
-                          borderRadius: "12px",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px 14px",
-                        fontSize: "12px",
-                        color: C.gray,
-                      }}
-                    >
-                      {r.submitter?.full_name}
-                      <br />
-                      <span style={{ fontSize: "11px" }}>
-                        {formatDate(r.submitted_at)}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "6px",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        {r.status !== "verified" && (
-                          <ActionChip
-                            label="✅ Verify"
-                            color={C.secondary}
-                            onClick={() => onUpdateStatus(r.id, "verified")}
-                          />
-                        )}
-                        {r.status !== "disputed" && (
-                          <ActionChip
-                            label="⚠️ Dispute"
-                            color={C.danger}
-                            onClick={() => onUpdateStatus(r.id, "disputed")}
-                          />
-                        )}
-                        {r.result_image_url && (
-                          <ActionChip
-                            label="📄 Image"
-                            color="#1565C0"
-                            onClick={() =>
-                              onViewImage({
-                                url: r.result_image_url,
-                                submitter: r.submitter?.full_name,
-                                submittedAt: r.submitted_at,
-                                pollingUnit: r.polling_unit,
-                              })
-                            }
-                          />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td className="px-3.5 py-3 font-[Montserrat,sans-serif] text-base font-extrabold text-[#1B5E20]">
+                        {r.votes_cast.toLocaleString()}
+                      </td>
+                      <td className="px-3.5 py-3 text-[13px] text-[#757575]">
+                        {r.accredited_voters?.toLocaleString()}
+                      </td>
+                      <td className="px-3.5 py-3">
+                        <span
+                          className={`${cfg.bg} ${cfg.color} px-2.5 py-0.5 rounded-full text-[11px] font-bold`}
+                        >
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-3 text-[12px] text-[#757575]">
+                        {r.submitter?.full_name}
+                        <br />
+                        <span className="text-[11px]">
+                          {formatDate(r.submitted_at)}
+                        </span>
+                      </td>
+                      <td className="px-3.5 py-3">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {r.status !== "verified" && (
+                            <ActionChip
+                              label="✅ Verify"
+                              color="text-[#2E7D32] border-[#2E7D32]"
+                              onClick={() => onUpdateStatus(r.id, "verified")}
+                            />
+                          )}
+                          {r.status !== "disputed" && (
+                            <ActionChip
+                              label="⚠️ Dispute"
+                              color="text-red-700 border-red-700"
+                              onClick={() => onUpdateStatus(r.id, "disputed")}
+                            />
+                          )}
+                          {r.result_image_url && (
+                            <ActionChip
+                              label="📄 Image"
+                              color="text-blue-800 border-blue-800"
+                              onClick={() =>
+                                onViewImage({
+                                  url: r.result_image_url,
+                                  submitter: r.submitter?.full_name,
+                                  submittedAt: r.submitted_at,
+                                  pollingUnit: r.polling_unit,
+                                })
+                              }
+                            />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -1614,71 +1038,25 @@ function ImageViewer({ url, submitter, submittedAt, pollingUnit, onClose }) {
   return (
     <div
       onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.85)",
-        backdropFilter: "blur(4px)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 200,
-        padding: "24px",
-      }}
+      className="fixed inset-0 bg-black/85 backdrop-blur-sm flex flex-col items-center justify-center z-[200] p-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxWidth: "860px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-        }}
+        className="w-full max-w-[860px] flex flex-col gap-3"
       >
         {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div className="flex justify-between items-center">
           <div>
-            <div
-              style={{
-                color: "#fff",
-                fontWeight: 700,
-                fontSize: "16px",
-                fontFamily: "Montserrat, sans-serif",
-              }}
-            >
+            <div className="text-white font-[Montserrat,sans-serif] text-base font-bold">
               Result Sheet — {pollingUnit}
             </div>
-            <div
-              style={{
-                color: "rgba(255,255,255,0.6)",
-                fontSize: "12px",
-                marginTop: "2px",
-              }}
-            >
+            <div className="text-white/60 text-xs mt-0.5">
               Submitted by {submitter} · {formatDate(submittedAt)}
             </div>
           </div>
           <button
             onClick={onClose}
-            style={{
-              background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.3)",
-              color: "#fff",
-              borderRadius: "8px",
-              padding: "8px 16px",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: 600,
-              fontFamily: "Poppins, sans-serif",
-            }}
+            className="bg-white/15 hover:bg-white/25 border border-white/30 text-white rounded-xl px-4 py-2 text-sm font-semibold cursor-pointer transition-colors duration-150"
           >
             ✕ Close
           </button>
@@ -1686,58 +1064,24 @@ function ImageViewer({ url, submitter, submittedAt, pollingUnit, onClose }) {
 
         {/* Image */}
         <div
-          style={{
-            position: "relative",
-            background: "#111",
-            borderRadius: "12px",
-            overflow: "hidden",
-            maxHeight: "75vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          className="relative bg-black/50 rounded-xl overflow-hidden max-h-[75vh] flex items-center justify-center"
+          onContextMenu={(e) => e.preventDefault()}
         >
           <img
             src={url}
             alt="Result sheet"
-            style={{
-              maxWidth: "100%",
-              maxHeight: "75vh",
-              objectFit: "contain",
-              display: "block",
-            }}
+            className="max-w-full max-h-[75vh] object-contain block select-none"
+            draggable={false}
           />
-
-          {/* Watermark overlay */}
-          <div
-            style={{
-              position: "absolute",
-              bottom: "16px",
-              right: "16px",
-              background: "rgba(27, 94, 32, 0.85)",
-              color: "#fff",
-              padding: "6px 12px",
-              borderRadius: "6px",
-              fontSize: "11px",
-              fontWeight: 600,
-              lineHeight: 1.5,
-              backdropFilter: "blur(4px)",
-            }}
-          >
+          {/* Watermark */}
+          <div className="absolute bottom-4 right-4 bg-[#1B5E20]/85 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-[11px] font-semibold leading-snug">
             Atunluto Group ERMS
             <br />
             Viewed: {new Date().toLocaleDateString("en-NG")}
           </div>
         </div>
 
-        {/* No download notice */}
-        <div
-          style={{
-            textAlign: "center",
-            fontSize: "11px",
-            color: "rgba(255,255,255,0.4)",
-          }}
-        >
+        <div className="text-center text-[11px] text-white/40">
           🔒 This image is watermarked and protected. Right-click is disabled.
         </div>
       </div>
@@ -1753,18 +1097,7 @@ function ActionChip({ label, color, onClick }) {
   return (
     <button
       onClick={onClick}
-      style={{
-        padding: "5px 10px",
-        background: "transparent",
-        border: `1.5px solid ${color}`,
-        borderRadius: "6px",
-        fontSize: "11px",
-        fontWeight: 600,
-        color,
-        cursor: "pointer",
-        fontFamily: "Poppins, sans-serif",
-        whiteSpace: "nowrap",
-      }}
+      className={`px-2.5 py-1.5 bg-transparent border-[1.5px] rounded-lg text-[11px] font-semibold cursor-pointer transition-all duration-150 hover:opacity-75 whitespace-nowrap ${color}`}
     >
       {label}
     </button>
@@ -1772,47 +1105,21 @@ function ActionChip({ label, color, onClick }) {
 }
 
 function PartyChip({ party }) {
-  const colors = {
-    APC: "#1565C0",
-    PDP: "#C62828",
-    LP: "#F57F17",
-    ADC: "#6A1B9A",
-    NNPP: "#2E7D32",
-  };
-  const bgs = {
-    APC: "#E3F2FD",
-    PDP: "#FFEBEE",
-    LP: "#FFF8E1",
-    ADC: "#F3E5F5",
-    NNPP: "#E8F5E9",
+  const cfg = PARTY_COLORS[party?.toUpperCase()] || {
+    text: "text-gray-700",
+    bg: "bg-gray-100",
   };
   return (
     <span
-      style={{
-        background: bgs[party] || "#EEE",
-        color: colors[party] || C.gray,
-        padding: "1px 6px",
-        borderRadius: "4px",
-        fontSize: "11px",
-        fontWeight: 700,
-      }}
+      className={`inline-block ${cfg.bg} ${cfg.text} px-1.5 py-0.5 rounded text-[11px] font-bold mt-0.5`}
     >
       {party}
     </span>
   );
 }
 
-function Skeleton({ h = 44, mb = 0 }) {
-  return (
-    <div
-      style={{
-        height: `${h}px`,
-        background: "#EEEEEE",
-        borderRadius: "8px",
-        marginBottom: `${mb}px`,
-      }}
-    />
-  );
+function Skeleton({ h = "h-11" }) {
+  return <div className={`${h} bg-[#EEEEEE] rounded-xl animate-pulse`} />;
 }
 
 function formatDate(iso) {
@@ -1831,31 +1138,3 @@ function formatStatus(s) {
     { upcoming: "Upcoming", active: "Active", concluded: "Concluded" }[s] || s
   );
 }
-
-const thStyle = {
-  padding: "14px 16px",
-  color: "#fff",
-  fontFamily: "Poppins, sans-serif",
-  fontSize: "12px",
-  fontWeight: 700,
-  textAlign: "center",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle = {
-  padding: "12px 16px",
-  fontSize: "13px",
-  color: C.text,
-  verticalAlign: "middle",
-};
-
-const miniSelectStyle = {
-  padding: "8px 12px",
-  border: `1.5px solid ${C.border}`,
-  borderRadius: "8px",
-  fontSize: "13px",
-  fontFamily: "Poppins, sans-serif",
-  outline: "none",
-  background: C.white,
-  cursor: "pointer",
-};

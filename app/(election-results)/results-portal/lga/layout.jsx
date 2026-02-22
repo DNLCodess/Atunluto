@@ -1,30 +1,13 @@
 /**
- * app/results/lga/layout.jsx
- * LGA Admin shell — auth guard + sidebar + session data injection.
+ * app/results-portal/lga/layout.jsx
+ * LGA Admin shell — fixed sidebar with active route highlighting.
  */
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import Link from "next/link";
-import "../erms.css";
-
-const C = {
-  primary: "#1B5E20",
-  secondary: "#2E7D32",
-  accent: "#4CAF50",
-  light: "#C8E6C9",
-  white: "#FFFFFF",
-  gray: "#757575",
-  border: "#E0E0E0",
-};
-
-const NAV_ITEMS = [
-  { href: "/results-portal/lga/dashboard", label: "Dashboard", icon: "🏠" },
-  { href: "/results-portal/lga/submit", label: "Submit Result", icon: "📊" },
-  { href: "/results-portal/lga/results", label: "My Results", icon: "📋" },
-  { href: "/results-portal/lga/report", label: "Report Issue", icon: "🚨" },
-  { href: "/results-portal/lga/settings", label: "Settings", icon: "⚙️" },
-];
+import Image from "next/image";
+import { logoutResultsAdmin } from "@/app/actions/election-auth";
+import LGASidebarNav from "./sidebar";
 
 export default async function LGALayout({ children }) {
   const hdrs = await headers();
@@ -35,179 +18,116 @@ export default async function LGALayout({ children }) {
 
   if (!role || role !== "lga_admin") redirect("/results-portal/login");
 
+  const initial =
+    name.trim().length > 0 ? name.trim().charAt(0).toUpperCase() : "A";
+
   return (
-    <div
-      className="erms-root erms-shell"
-      /* Inject session into DOM so client components can read it */
-      data-erms-id={adminId}
-      data-erms-lga={lga}
-      data-erms-name={name}
-    >
-      {/* Skip to content */}
-      <a href="#erms-main" className="erms-skip-link">
+    <div className="h-screen flex overflow-hidden bg-[#F0F4F0]">
+      {/* Skip link */}
+      <a
+        href="#erms-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-[#1B5E20] focus:rounded-lg focus:shadow-lg focus:text-sm focus:font-semibold"
+      >
         Skip to content
       </a>
 
-      {/* ── Sidebar ───────────────────────── */}
-      <aside className="erms-sidebar" aria-label="LGA Admin Navigation">
-        {/* Logo */}
-        <div
-          className="erms-sidebar-logo"
-          style={{
-            padding: "24px 20px 16px",
-            borderBottom: `1px solid rgba(255,255,255,0.12)`,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "Montserrat, sans-serif",
-              fontSize: "14px",
-              fontWeight: 900,
-              color: C.white,
-              letterSpacing: "1px",
-            }}
-          >
-            ATUNLUTO
-          </div>
-          <div
-            style={{
-              fontSize: "10px",
-              color: "rgba(255,255,255,0.55)",
-              letterSpacing: "0.5px",
-              marginTop: "2px",
-            }}
-          >
-            ELECTION RESULTS SYSTEM
-          </div>
-        </div>
-
-        {/* Role badge */}
-        <div
-          className="erms-sidebar-role"
-          style={{
-            padding: "14px 20px",
-            borderBottom: `1px solid rgba(255,255,255,0.12)`,
-          }}
-        >
-          <div
-            style={{
-              background: "rgba(255,255,255,0.12)",
-              borderRadius: "8px",
-              padding: "10px 12px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "10px",
-                color: "rgba(255,255,255,0.55)",
-                fontWeight: 700,
-                letterSpacing: "0.8px",
-                textTransform: "uppercase",
-                marginBottom: "3px",
-              }}
-            >
-              LGA Admin
+      {/* ── Sidebar ── */}
+      <aside
+        className="w-64 h-screen flex flex-col shrink-0 bg-[#1B5E20] shadow-xl overflow-hidden print:hidden"
+        aria-label="LGA Admin Navigation"
+      >
+        {/* Branding */}
+        <div className="px-6 pt-7 pb-5 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-white/10 flex items-center justify-center">
+              <Image
+                src="/logo.png"
+                alt="Atunluto Group"
+                width={36}
+                height={36}
+                className="object-contain w-full h-full"
+              />
             </div>
-            <div
-              style={{
-                fontSize: "14px",
-                color: C.white,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {name}
-            </div>
-            <div style={{ fontSize: "11px", color: C.light, marginTop: "2px" }}>
-              📍 {lga}
+            <div>
+              <div className="text-white text-[13px] font-black tracking-widest font-[Montserrat,sans-serif]">
+                ATUNLUTO
+              </div>
+              <div className="text-white/40 text-[9px] tracking-widest uppercase leading-none mt-0.5">
+                Results Portal
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="erms-sidebar-nav" style={{ padding: "12px 0" }}>
-          {NAV_ITEMS.map(({ href, label, icon }) => (
-            <SidebarLink key={href} href={href} label={label} icon={icon} />
-          ))}
-        </nav>
+        <div className="mx-6 border-t border-white/10 shrink-0" />
 
-        {/* Footer */}
-        <div
-          className="erms-sidebar-footer"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            padding: "16px 20px",
-            borderTop: `1px solid rgba(255,255,255,0.12)`,
-          }}
-        >
-          <form action="/results/api/logout" method="POST">
+        {/* User badge */}
+        <div className="px-4 py-4 shrink-0">
+          <div className="bg-white/10 border border-white/10 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-[#4CAF50]/30 flex items-center justify-center text-white text-xs font-bold shrink-0 select-none">
+                {initial}
+              </div>
+              <div className="min-w-0">
+                <div className="text-white text-[13px] font-semibold truncate leading-tight">
+                  {name}
+                </div>
+                <div className="text-[#A5D6A7] text-[10px] font-medium tracking-wide uppercase mt-0.5">
+                  LGA Admin
+                </div>
+              </div>
+            </div>
+            <div className="mt-2.5 flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5">
+              <span className="text-[10px]">📍</span>
+              <span className="text-[#C8E6C9] text-[11px] font-semibold truncate">
+                {lga}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-6 border-t border-white/10 mb-2 shrink-0" />
+
+        {/* Nav label */}
+        <div className="px-6 mb-1 shrink-0">
+          <span className="text-white/30 text-[9px] font-bold tracking-widest uppercase">
+            Navigation
+          </span>
+        </div>
+
+        {/* Nav — client component for usePathname */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 scrollbar-none">
+          <LGASidebarNav />
+        </div>
+
+        {/* Footer — logout */}
+        <div className="px-4 py-5 shrink-0">
+          <div className="mx-2 border-t border-white/10 mb-4" />
+          <form action={logoutResultsAdmin}>
             <button
               type="submit"
-              style={{
-                width: "100%",
-                padding: "10px",
-                background: "rgba(255,255,255,0.1)",
-                color: "rgba(255,255,255,0.75)",
-                border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                fontFamily: "Poppins, sans-serif",
-              }}
+              className="w-full py-2.5 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/65 hover:text-white border border-white/15 hover:border-white/25 rounded-xl text-[13px] font-semibold cursor-pointer transition-all duration-150"
             >
+              <span className="text-sm">↩</span>
               Sign Out
             </button>
           </form>
+          <p className="text-center text-white/25 text-[10px] mt-3 tracking-wide">
+            Oyo South Senatorial District
+          </p>
         </div>
       </aside>
 
-      {/* ── Main content ──────────────────── */}
+      {/* ── Main content — scrolls independently ── */}
       <main
         id="erms-main"
-        className="erms-content"
-        style={{ background: "#F5F5F5", minHeight: "100vh" }}
+        className="flex-1 min-w-0 h-screen overflow-y-auto"
+        data-erms-id={adminId}
+        data-erms-lga={lga}
+        data-erms-name={name}
       >
         {children}
       </main>
     </div>
-  );
-}
-
-function SidebarLink({ href, label, icon }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        padding: "11px 20px",
-        color: "rgba(255,255,255,0.8)",
-        textDecoration: "none",
-        fontSize: "13px",
-        fontWeight: 500,
-        transition: "all 0.15s",
-        borderLeft: "3px solid transparent",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "rgba(255,255,255,0.1)";
-        e.currentTarget.style.color = "#fff";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "transparent";
-        e.currentTarget.style.color = "rgba(255,255,255,0.8)";
-      }}
-    >
-      <span style={{ fontSize: "16px", width: "20px", textAlign: "center" }}>
-        {icon}
-      </span>
-      <span className="erms-sidebar-label">{label}</span>
-    </Link>
   );
 }

@@ -97,7 +97,7 @@ export function useAddCandidate() {
   return useMutation({
     mutationFn: async (payload) => {
       const { addCandidate } = await import("@/app/actions/elections");
-      const result = await addCandidate(payload);
+      const result = await addCandidate(payload); // photoPath passes through as-is
       if (result?.error) throw new Error(result.error);
       return result;
     },
@@ -108,7 +108,6 @@ export function useAddCandidate() {
     },
   });
 }
-
 export function useDeleteCandidate() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,18 +1,12 @@
 "use client";
 
 /**
- * app/results/lga/submit/page.jsx
- * LGA Admin — Result Submission Form
- *
- * Steps:
- *   1. Select election + location (ward, polling unit)
- *   2. Enter votes per candidate + voter counts
- *   3. Upload result sheet image + add notes
- *   4. Review & confirm
- *   5. Success screen
+ * app/results-portal/lga/submit/page.jsx
+ * LGA Admin — Result Submission Form (4-step)
  */
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import {
   useActiveElections,
   useElectionCandidates,
@@ -20,59 +14,55 @@ import {
   useSubmitResult,
 } from "@/hooks/use-election-results";
 
-const C = {
-  primary: "#1B5E20",
-  secondary: "#2E7D32",
-  accent: "#4CAF50",
-  light: "#C8E6C9",
-  text: "#212121",
-  gray: "#757575",
-  border: "#E0E0E0",
-  bg: "#F5F5F5",
-  white: "#FFFFFF",
-  danger: "#C62828",
-  dangerBg: "#FFEBEE",
-};
-
 const STEPS = ["Location", "Votes", "Evidence", "Review"];
+
+const PARTY_COLORS = {
+  APC: { text: "text-blue-800", bg: "bg-blue-50" },
+  PDP: { text: "text-red-800", bg: "bg-red-50" },
+  LP: { text: "text-yellow-800", bg: "bg-yellow-50" },
+  ADC: { text: "text-purple-800", bg: "bg-purple-50" },
+  NNPP: { text: "text-green-800", bg: "bg-green-50" },
+  SDP: { text: "text-orange-800", bg: "bg-orange-50" },
+};
 
 // ─────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────
 
-export default function SubmitResultPage({ searchParams }) {
-  // lga comes from session (injected via header in layout)
-  // For client component, we read it from a data attribute set by layout
-  const lga =
-    typeof document !== "undefined"
-      ? document.documentElement.dataset.ermsLga || ""
-      : "";
+export default function SubmitResultPage() {
+  const [lga, setLga] = useState("");
 
-  const [step, setStep] = useState(0); // 0-3, then success
+  useEffect(() => {
+    const val =
+      document.querySelector("main[data-erms-lga]")?.dataset?.ermsLga || "";
+    setLga(val);
+  }, []);
+
+  const [step, setStep] = useState(0);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState("");
 
-  // Form state
   const [electionId, setElectionId] = useState("");
   const [ward, setWard] = useState("");
   const [pollingUnit, setPollingUnit] = useState("");
-  const [candidateVotes, setCandidateVotes] = useState({}); // { candidateId: votes }
+  const [candidateVotes, setCandidateVotes] = useState({});
   const [accreditedVoters, setAccreditedVoters] = useState("");
   const [registeredVoters, setRegisteredVoters] = useState("");
   const [notes, setNotes] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [imageUploadState, setImageUploadState] = useState("idle");
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
+  const [imagePath, setImagePath] = useState(null);
+  const imageXhrRef = useRef(null);
 
-  // Data fetching
   const { data: elections = [], isLoading: loadingElections } =
     useActiveElections();
   const { data: candidates = [], isLoading: loadingCandidates } =
     useElectionCandidates(electionId);
   const { data: wardsData = [], isLoading: loadingWards } = useLGAWards(lga);
-
   const submitResult = useSubmitResult();
 
-  // Derived
   const selectedElection = elections.find((e) => e.id === electionId);
   const wardOptions = wardsData.map((w) =>
     typeof w === "string" ? { name: w, polling_units: [] } : w,
@@ -87,8 +77,7 @@ export default function SubmitResultPage({ searchParams }) {
   const overVote =
     Number(accreditedVoters) > 0 && totalVotes > Number(accreditedVoters);
 
-  // Step validation
-  const step0Valid = electionId && ward && pollingUnit;
+  const step0Valid = !!(electionId && ward && pollingUnit);
   const step1Valid =
     candidates.length > 0 &&
     candidates.every(
@@ -97,22 +86,69 @@ export default function SubmitResultPage({ searchParams }) {
     accreditedVoters !== "" &&
     registeredVoters !== "" &&
     !overVote;
-  const step2Valid = true; // image + notes are optional
-  const stepValid = [step0Valid, step1Valid, step2Valid, true];
+  const stepValid = [step0Valid, step1Valid, true, true];
 
   function handleImageChange(e) {
     const file = e.target.files?.[0];
     if (!file) {
       setImageFile(null);
       setImagePreview(null);
+      setImagePath(null);
+      setImageUploadState("idle");
+      setImageUploadProgress(0);
       return;
     }
     setImageFile(file);
+    setImagePath(null);
+    setImageUploadState("idle");
+    setImageUploadProgress(0);
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target.result);
     reader.readAsDataURL(file);
+    // Auto-upload immediately on selection
+    uploadImageFile(file);
   }
+  async function uploadImageFile(file) {
+    setImageUploadState("uploading");
+    setImageUploadProgress(0);
+    try {
+      const { getResultImageUploadUrl } =
+        await import("@/app/actions/result-submission");
+      const urlResult = await getResultImageUploadUrl({
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+      if (urlResult.error) {
+        setImageUploadState("error");
+        setError(urlResult.error);
+        return;
+      }
 
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        imageXhrRef.current = xhr;
+        xhr.upload.addEventListener("progress", (ev) => {
+          if (ev.lengthComputable)
+            setImageUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+        });
+        xhr.addEventListener("load", () =>
+          xhr.status < 300 ? resolve() : reject(new Error("Upload failed")),
+        );
+        xhr.addEventListener("error", () => reject(new Error("Network error")));
+        xhr.open("PUT", urlResult.uploadUrl);
+        xhr.setRequestHeader("Content-Type", file.type);
+        xhr.send(file);
+      });
+
+      setImagePath(urlResult.path);
+      setImageUploadState("done");
+      setImageUploadProgress(100);
+    } catch (err) {
+      setImageUploadState("error");
+      setError(err.message || "Image upload failed.");
+    }
+  }
   function handleVoteChange(candidateId, value) {
     setCandidateVotes((prev) => ({
       ...prev,
@@ -122,6 +158,8 @@ export default function SubmitResultPage({ searchParams }) {
 
   async function handleSubmit() {
     setError("");
+    if (imageFile && imageUploadState !== "done")
+      return setError("Please wait for the image upload to finish.");
     try {
       const result = await submitResult.mutateAsync({
         electionId,
@@ -134,7 +172,7 @@ export default function SubmitResultPage({ searchParams }) {
         accreditedVoters: Number(accreditedVoters),
         registeredVoters: Number(registeredVoters),
         notes,
-        imageFile,
+        imagePath, // storage path string, not File
       });
       setSuccess(result);
     } catch (err) {
@@ -157,214 +195,157 @@ export default function SubmitResultPage({ searchParams }) {
     setImagePreview(null);
   }
 
-  // ── Success screen ───────────────────────
-  if (success) {
-    return <SuccessScreen result={success} onAnother={reset} />;
-  }
+  if (success) return <SuccessScreen result={success} onAnother={reset} />;
 
   return (
-    <div
-      style={{
-        fontFamily: "Poppins, sans-serif",
-        color: C.text,
-        maxWidth: "720px",
-      }}
-    >
-      {/* Page header */}
-      <div style={{ marginBottom: "32px" }}>
-        <h1
-          style={{
-            fontFamily: "Montserrat, sans-serif",
-            fontSize: "26px",
-            fontWeight: 800,
-            color: C.primary,
-            margin: "0 0 6px",
-          }}
-        >
-          Submit Results
-        </h1>
-        <p style={{ color: C.gray, fontSize: "14px", margin: 0 }}>
-          {lga ? (
-            <>
-              <strong style={{ color: C.primary }}>{lga}</strong> · Enter
-              polling unit results accurately
-            </>
-          ) : (
-            "Loading your LGA..."
-          )}
-        </p>
-      </div>
-
-      {/* Stepper */}
-      <StepIndicator steps={STEPS} current={step} />
-
-      {/* Error banner */}
-      {error && (
-        <div
-          style={{
-            background: C.dangerBg,
-            border: `1px solid #FFCDD2`,
-            borderRadius: "10px",
-            padding: "14px 16px",
-            marginBottom: "20px",
-            fontSize: "13px",
-            color: C.danger,
-          }}
-        >
-          ⚠️ {error}
+    <div className="p-8 font-[Poppins,sans-serif] text-[#212121]">
+      <div className="w-full">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
+            Submit Results
+          </h1>
+          <p className="text-sm text-[#757575]">
+            {lga ? (
+              <>
+                <strong className="text-[#1B5E20]">{lga}</strong> · Enter
+                polling unit results accurately
+              </>
+            ) : (
+              "Loading your LGA..."
+            )}
+          </p>
         </div>
-      )}
 
-      {/* Form card */}
-      <div
-        style={{
-          background: C.white,
-          borderRadius: "14px",
-          border: `1px solid ${C.border}`,
-          padding: "32px",
-          marginTop: "24px",
-        }}
-      >
-        {/* ── STEP 0: Location ───────────── */}
-        {step === 0 && (
-          <StepLocation
-            elections={elections}
-            loadingElections={loadingElections}
-            electionId={electionId}
-            onElectionChange={(id) => {
-              setElectionId(id);
-              setWard("");
-              setPollingUnit("");
-              setCandidateVotes({});
-            }}
-            wardOptions={wardOptions}
-            loadingWards={loadingWards}
-            lga={lga}
-            ward={ward}
-            onWardChange={(w) => {
-              setWard(w);
-              setPollingUnit("");
-            }}
-            pollingUnits={pollingUnits}
-            pollingUnit={pollingUnit}
-            onPollingUnitChange={setPollingUnit}
-          />
+        {/* Stepper */}
+        <StepIndicator steps={STEPS} current={step} />
+
+        {/* Error */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mt-5 text-[13px] text-red-800 flex items-center gap-2">
+            <span>⚠️</span> {error}
+          </div>
         )}
 
-        {/* ── STEP 1: Votes ──────────────── */}
-        {step === 1 && (
-          <StepVotes
-            candidates={candidates}
-            loadingCandidates={loadingCandidates}
-            candidateVotes={candidateVotes}
-            onVoteChange={handleVoteChange}
-            accreditedVoters={accreditedVoters}
-            onAccreditedChange={setAccreditedVoters}
-            registeredVoters={registeredVoters}
-            onRegisteredChange={setRegisteredVoters}
-            totalVotes={totalVotes}
-            overVote={overVote}
-          />
-        )}
-
-        {/* ── STEP 2: Evidence ───────────── */}
-        {step === 2 && (
-          <StepEvidence
-            imageFile={imageFile}
-            imagePreview={imagePreview}
-            onImageChange={handleImageChange}
-            notes={notes}
-            onNotesChange={setNotes}
-          />
-        )}
-
-        {/* ── STEP 3: Review ─────────────── */}
-        {step === 3 && (
-          <StepReview
-            election={selectedElection}
-            lga={lga}
-            ward={ward}
-            pollingUnit={pollingUnit}
-            candidates={candidates}
-            candidateVotes={candidateVotes}
-            accreditedVoters={accreditedVoters}
-            registeredVoters={registeredVoters}
-            totalVotes={totalVotes}
-            imageFile={imageFile}
-            notes={notes}
-          />
-        )}
-
-        {/* Navigation */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: "32px",
-            paddingTop: "24px",
-            borderTop: `1px solid ${C.border}`,
-          }}
-        >
-          <button
-            onClick={() => setStep((s) => s - 1)}
-            disabled={step === 0}
-            style={{
-              padding: "12px 24px",
-              background: step === 0 ? "#EEE" : C.white,
-              color: step === 0 ? "#BDBDBD" : C.text,
-              border: `1.5px solid ${step === 0 ? "#EEE" : C.border}`,
-              borderRadius: "8px",
-              fontSize: "14px",
-              fontWeight: 500,
-              cursor: step === 0 ? "not-allowed" : "pointer",
-              fontFamily: "Poppins, sans-serif",
-            }}
-          >
-            ← Back
-          </button>
-
-          {step < 3 ? (
-            <button
-              onClick={() => setStep((s) => s + 1)}
-              disabled={!stepValid[step]}
-              style={{
-                padding: "12px 28px",
-                background: stepValid[step] ? C.primary : "#A5D6A7",
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 600,
-                cursor: stepValid[step] ? "pointer" : "not-allowed",
-                fontFamily: "Poppins, sans-serif",
+        {/* Form card */}
+        <div className="bg-white rounded-2xl border border-[#E0E0E0] p-8 mt-6">
+          {step === 0 && (
+            <StepLocation
+              elections={elections}
+              loadingElections={loadingElections}
+              electionId={electionId}
+              onElectionChange={(id) => {
+                setElectionId(id);
+                setWard("");
+                setPollingUnit("");
+                setCandidateVotes({});
               }}
-            >
-              Next →
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={submitResult.isPending}
-              style={{
-                padding: "12px 32px",
-                background: submitResult.isPending ? "#A5D6A7" : C.primary,
-                color: "#fff",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 700,
-                cursor: submitResult.isPending ? "not-allowed" : "pointer",
-                fontFamily: "Poppins, sans-serif",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
+              wardOptions={wardOptions}
+              loadingWards={loadingWards}
+              lga={lga}
+              ward={ward}
+              onWardChange={(w) => {
+                setWard(w);
+                setPollingUnit("");
               }}
-            >
-              {submitResult.isPending
-                ? "⏳ Submitting..."
-                : "✅ Submit Results"}
-            </button>
+              pollingUnits={pollingUnits}
+              pollingUnit={pollingUnit}
+              onPollingUnitChange={setPollingUnit}
+            />
           )}
+
+          {step === 1 && (
+            <StepVotes
+              candidates={candidates}
+              loadingCandidates={loadingCandidates}
+              candidateVotes={candidateVotes}
+              onVoteChange={handleVoteChange}
+              accreditedVoters={accreditedVoters}
+              onAccreditedChange={setAccreditedVoters}
+              registeredVoters={registeredVoters}
+              onRegisteredChange={setRegisteredVoters}
+              totalVotes={totalVotes}
+              overVote={overVote}
+            />
+          )}
+
+          {step === 2 && (
+            <StepEvidence
+              imageFile={imageFile}
+              imagePreview={imagePreview}
+              onImageChange={handleImageChange}
+              notes={notes}
+              onNotesChange={setNotes}
+              uploadState={imageUploadState}
+              uploadProgress={imageUploadProgress}
+            />
+          )}
+
+          {step === 3 && (
+            <StepReview
+              election={selectedElection}
+              lga={lga}
+              ward={ward}
+              pollingUnit={pollingUnit}
+              candidates={candidates}
+              candidateVotes={candidateVotes}
+              accreditedVoters={accreditedVoters}
+              registeredVoters={registeredVoters}
+              totalVotes={totalVotes}
+              imageFile={imageFile}
+              notes={notes}
+            />
+          )}
+
+          {/* Navigation */}
+          <div className="flex justify-between mt-8 pt-6 border-t border-[#E0E0E0]">
+            <button
+              onClick={() => setStep((s) => s - 1)}
+              disabled={step === 0}
+              className={`px-6 py-3 rounded-xl text-sm font-medium border transition-all duration-150
+                ${
+                  step === 0
+                    ? "bg-[#EEEEEE] text-[#BDBDBD] border-[#EEEEEE] cursor-not-allowed"
+                    : "bg-white text-[#212121] border-[#E0E0E0] hover:border-[#9E9E9E] cursor-pointer"
+                }`}
+            >
+              ← Back
+            </button>
+
+            {step < 3 ? (
+              <button
+                onClick={() => setStep((s) => s + 1)}
+                disabled={!stepValid[step]}
+                className={`px-7 py-3 rounded-xl text-sm font-semibold text-white border-none transition-all duration-150
+                  ${
+                    stepValid[step]
+                      ? "bg-[#1B5E20] hover:bg-[#2E7D32] cursor-pointer shadow-lg shadow-[#1B5E20]/20"
+                      : "bg-[#A5D6A7] cursor-not-allowed"
+                  }`}
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={submitResult.isPending}
+                className={`px-8 py-3 rounded-xl text-sm font-bold text-white border-none flex items-center gap-2 transition-all duration-150
+                  ${
+                    submitResult.isPending
+                      ? "bg-[#A5D6A7] cursor-not-allowed"
+                      : "bg-[#1B5E20] hover:bg-[#2E7D32] cursor-pointer shadow-lg shadow-[#1B5E20]/20"
+                  }`}
+              >
+                {submitResult.isPending ? (
+                  <>
+                    <Spinner /> Submitting...
+                  </>
+                ) : (
+                  "✅ Submit Results"
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -372,7 +353,7 @@ export default function SubmitResultPage({ searchParams }) {
 }
 
 // ─────────────────────────────────────────
-// STEP 0 — Location Selection
+// STEP 0 — Location
 // ─────────────────────────────────────────
 
 function StepLocation({
@@ -396,51 +377,28 @@ function StepLocation({
         subtitle="Choose the election and polling unit you are submitting results for."
       />
 
-      {/* LGA badge */}
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "8px",
-          background: "#E8F5E9",
-          border: `1px solid ${C.light}`,
-          borderRadius: "8px",
-          padding: "8px 14px",
-          marginBottom: "24px",
-        }}
-      >
-        <span style={{ fontSize: "16px" }}>📍</span>
-        <span style={{ fontSize: "13px", fontWeight: 700, color: C.primary }}>
+      <div className="inline-flex items-center gap-2 bg-green-50 border border-[#C8E6C9] rounded-lg px-3.5 py-2 mb-6">
+        <span>📍</span>
+        <span className="text-[13px] font-bold text-[#1B5E20]">
           Your LGA: {lga}
         </span>
       </div>
 
       {/* Election */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={labelStyle}>
+      <div className="mb-5">
+        <Label>
           Election <Required />
-        </label>
+        </Label>
         {loadingElections ? (
-          <Skeleton h={44} />
+          <Skeleton />
         ) : elections.length === 0 ? (
-          <div
-            style={{
-              padding: "14px",
-              background: "#FFF8E1",
-              border: "1px solid #FFE082",
-              borderRadius: "8px",
-              fontSize: "13px",
-              color: "#5D4037",
-            }}
-          >
+          <div className="px-4 py-3.5 bg-yellow-50 border border-yellow-200 rounded-xl text-[13px] text-yellow-900">
             ⚠️ No active elections at the moment. Contact the State Admin.
           </div>
         ) : (
-          <select
+          <Select
             value={electionId}
             onChange={(e) => onElectionChange(e.target.value)}
-            required
-            style={selectStyle}
           >
             <option value="">Select election...</option>
             {elections.map((e) => (
@@ -448,31 +406,28 @@ function StepLocation({
                 {e.title}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </div>
 
       {/* Ward */}
-      <div style={{ marginBottom: "20px" }}>
-        <label style={labelStyle}>
+      <div className="mb-5">
+        <Label>
           Ward <Required />
-        </label>
+        </Label>
         {loadingWards ? (
-          <Skeleton h={44} />
+          <Skeleton />
         ) : wardOptions.length === 0 && electionId ? (
-          <input
-            type="text"
+          <Input
             value={ward}
             onChange={(e) => onWardChange(e.target.value)}
             placeholder="Enter ward name manually"
-            style={inputStyle}
           />
         ) : (
-          <select
+          <Select
             value={ward}
             onChange={(e) => onWardChange(e.target.value)}
             disabled={!electionId}
-            style={{ ...selectStyle, opacity: !electionId ? 0.5 : 1 }}
           >
             <option value="">Select ward...</option>
             {wardOptions.map((w) => (
@@ -480,21 +435,20 @@ function StepLocation({
                 {w.name || w}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </div>
 
-      {/* Polling Unit */}
-      <div style={{ marginBottom: "4px" }}>
-        <label style={labelStyle}>
+      {/* Polling unit */}
+      <div>
+        <Label>
           Polling Unit <Required />
-        </label>
+        </Label>
         {pollingUnits.length > 0 ? (
-          <select
+          <Select
             value={pollingUnit}
             onChange={(e) => onPollingUnitChange(e.target.value)}
             disabled={!ward}
-            style={{ ...selectStyle, opacity: !ward ? 0.5 : 1 }}
           >
             <option value="">Select polling unit...</option>
             {pollingUnits.map((pu) => (
@@ -502,20 +456,18 @@ function StepLocation({
                 {pu}
               </option>
             ))}
-          </select>
+          </Select>
         ) : (
-          <input
-            type="text"
+          <Input
             value={pollingUnit}
             onChange={(e) => onPollingUnitChange(e.target.value)}
             placeholder="Enter polling unit name or code"
             disabled={!ward}
-            style={{ ...inputStyle, opacity: !ward ? 0.5 : 1 }}
           />
         )}
-        <div style={{ fontSize: "11px", color: C.gray, marginTop: "6px" }}>
+        <p className="text-[11px] text-[#757575] mt-1.5">
           Enter the exact name or code as shown on the official result sheet.
-        </div>
+        </p>
       </div>
     </div>
   );
@@ -545,99 +497,49 @@ function StepVotes({
       />
 
       {loadingCandidates ? (
-        <div style={{ marginBottom: "24px" }}>
+        <div className="space-y-3 mb-7">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} h={64} mb={12} />
+            <Skeleton key={i} h="h-16" />
           ))}
         </div>
       ) : candidates.length === 0 ? (
-        <div
-          style={{
-            padding: "20px",
-            background: "#FFF8E1",
-            borderRadius: "8px",
-            fontSize: "13px",
-            color: "#5D4037",
-            marginBottom: "24px",
-          }}
-        >
+        <div className="px-4 py-5 bg-yellow-50 rounded-xl text-[13px] text-yellow-900 mb-7">
           ⚠️ No candidates found for this election. Contact the State Admin.
         </div>
       ) : (
-        <div style={{ marginBottom: "28px" }}>
-          {/* Candidate vote inputs */}
+        <div className="mb-7">
           {candidates.map((candidate) => (
             <div
               key={candidate.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "16px",
-                padding: "16px",
-                border: `1.5px solid ${C.border}`,
-                borderRadius: "10px",
-                marginBottom: "10px",
-                background:
-                  candidateVotes[candidate.id] > 0 ? "#F1F8E9" : C.white,
-                transition: "background 0.2s",
-              }}
+              className={`flex items-center gap-4 px-4 py-4 border-[1.5px] rounded-xl mb-2.5 transition-colors duration-150
+                ${candidateVotes[candidate.id] > 0 ? "border-[#C8E6C9] bg-green-50" : "border-[#E0E0E0] bg-white"}`}
             >
-              <div
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  background: "#E8F5E9",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                  color: C.primary,
-                  fontSize: "14px",
-                  flexShrink: 0,
-                  overflow: "hidden",
-                }}
-              >
+              <div className="w-10 h-10 rounded-full bg-green-50 border border-[#C8E6C9] flex items-center justify-center font-bold text-[#1B5E20] text-sm shrink-0 overflow-hidden">
                 {candidate.photo_url ? (
                   <img
                     src={candidate.photo_url}
                     alt=""
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   candidate.full_name.charAt(0)
                 )}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{ fontSize: "14px", fontWeight: 600, color: C.text }}
-                >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-[#212121]">
                   {candidate.full_name}
                 </div>
-                <div style={{ fontSize: "12px" }}>
+                <div className="flex items-center gap-1.5 mt-0.5">
                   <PartyBadge party={candidate.party} />
                   {candidate.position && (
-                    <span style={{ color: C.gray, marginLeft: "6px" }}>
+                    <span className="text-xs text-[#757575]">
                       {candidate.position}
                     </span>
                   )}
                 </div>
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexShrink: 0,
-                }}
-              >
-                <label
-                  style={{ fontSize: "12px", color: C.gray, fontWeight: 600 }}
-                >
+              <div className="flex items-center gap-2.5 shrink-0">
+                <label className="text-xs text-[#757575] font-semibold">
                   Votes
                 </label>
                 <input
@@ -646,129 +548,69 @@ function StepVotes({
                   value={candidateVotes[candidate.id] ?? ""}
                   onChange={(e) => onVoteChange(candidate.id, e.target.value)}
                   placeholder="0"
-                  style={{
-                    width: "90px",
-                    padding: "10px 12px",
-                    border: `1.5px solid ${C.border}`,
-                    borderRadius: "8px",
-                    fontSize: "18px",
-                    fontWeight: 700,
-                    textAlign: "center",
-                    fontFamily: "Montserrat, sans-serif",
-                    outline: "none",
-                    color: C.primary,
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = C.primary)}
-                  onBlur={(e) => (e.target.style.borderColor = C.border)}
+                  className="w-[90px] px-3 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-lg font-bold text-center font-[Montserrat,sans-serif] text-[#1B5E20] outline-none focus:border-[#1B5E20] transition-colors duration-150"
                 />
               </div>
             </div>
           ))}
 
-          {/* Running total */}
+          {/* Total */}
           <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "12px 16px",
-              background: overVote ? C.dangerBg : "#F1F8E9",
-              border: `1px solid ${overVote ? "#FFCDD2" : C.light}`,
-              borderRadius: "8px",
-              marginTop: "8px",
-            }}
+            className={`flex justify-between items-center px-4 py-3 rounded-xl border mt-2 ${overVote ? "bg-red-50 border-red-200" : "bg-green-50 border-[#C8E6C9]"}`}
           >
             <span
-              style={{
-                fontSize: "13px",
-                fontWeight: 600,
-                color: overVote ? C.danger : C.primary,
-              }}
+              className={`text-[13px] font-semibold ${overVote ? "text-red-800" : "text-[#1B5E20]"}`}
             >
               Total Votes Cast
             </span>
             <span
-              style={{
-                fontSize: "20px",
-                fontWeight: 800,
-                color: overVote ? C.danger : C.primary,
-                fontFamily: "Montserrat, sans-serif",
-              }}
+              className={`font-[Montserrat,sans-serif] text-xl font-extrabold ${overVote ? "text-red-800" : "text-[#1B5E20]"}`}
             >
               {totalVotes.toLocaleString()}
             </span>
           </div>
           {overVote && (
-            <div
-              style={{
-                fontSize: "12px",
-                color: C.danger,
-                marginTop: "6px",
-                fontWeight: 600,
-              }}
-            >
+            <p className="text-xs text-red-700 font-semibold mt-1.5">
               ⚠️ Total votes ({totalVotes}) exceeds accredited voters (
               {accreditedVoters}). Please recheck.
-            </div>
+            </p>
           )}
         </div>
       )}
 
       {/* Voter counts */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "16px",
-          paddingTop: "20px",
-          borderTop: `1px solid ${C.border}`,
-        }}
-      >
+      <div className="grid grid-cols-2 gap-4 pt-5 border-t border-[#E0E0E0]">
         <div>
-          <label style={labelStyle}>
+          <Label>
             Accredited Voters <Required />
-          </label>
+          </Label>
           <input
             type="number"
             min="0"
             value={accreditedVoters}
             onChange={(e) => onAccreditedChange(e.target.value)}
             placeholder="0"
-            style={{
-              ...inputStyle,
-              textAlign: "center",
-              fontSize: "18px",
-              fontWeight: 700,
-            }}
-            onFocus={(e) => (e.target.style.borderColor = C.primary)}
-            onBlur={(e) => (e.target.style.borderColor = C.border)}
+            className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-lg font-bold text-center font-[Montserrat,sans-serif] text-[#1B5E20] outline-none focus:border-[#1B5E20] transition-colors duration-150"
           />
-          <div style={{ fontSize: "11px", color: C.gray, marginTop: "4px" }}>
+          <p className="text-[11px] text-[#757575] mt-1">
             From the result sheet header
-          </div>
+          </p>
         </div>
         <div>
-          <label style={labelStyle}>
+          <Label>
             Registered Voters <Required />
-          </label>
+          </Label>
           <input
             type="number"
             min="0"
             value={registeredVoters}
             onChange={(e) => onRegisteredChange(e.target.value)}
             placeholder="0"
-            style={{
-              ...inputStyle,
-              textAlign: "center",
-              fontSize: "18px",
-              fontWeight: 700,
-            }}
-            onFocus={(e) => (e.target.style.borderColor = C.primary)}
-            onBlur={(e) => (e.target.style.borderColor = C.border)}
+            className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-lg font-bold text-center font-[Montserrat,sans-serif] text-[#1B5E20] outline-none focus:border-[#1B5E20] transition-colors duration-150"
           />
-          <div style={{ fontSize: "11px", color: C.gray, marginTop: "4px" }}>
+          <p className="text-[11px] text-[#757575] mt-1">
             Total registered in this unit
-          </div>
+          </p>
         </div>
       </div>
     </div>
@@ -785,6 +627,8 @@ function StepEvidence({
   onImageChange,
   notes,
   onNotesChange,
+  uploadState,
+  uploadProgress,
 }) {
   return (
     <div>
@@ -793,135 +637,113 @@ function StepEvidence({
         subtitle="Attach the official INEC result sheet and any relevant notes."
       />
 
-      {/* Image upload */}
-      <div style={{ marginBottom: "28px" }}>
-        <label style={labelStyle}>
+      <div className="mb-7">
+        <Label>
           Result Sheet Image{" "}
-          <span style={{ color: C.gray, fontWeight: 400 }}>(Recommended)</span>
-        </label>
+          <span className="font-normal text-[#757575]">(Recommended)</span>
+        </Label>
 
         {imagePreview ? (
-          <div style={{ position: "relative", marginBottom: "12px" }}>
-            <img
-              src={imagePreview}
-              alt="Result sheet preview"
-              style={{
-                width: "100%",
-                maxHeight: "320px",
-                objectFit: "contain",
-                borderRadius: "10px",
-                border: `1.5px solid ${C.light}`,
-              }}
-            />
-            <button
-              onClick={() => {
-                onImageChange({ target: { files: [] } });
-              }}
-              style={{
-                position: "absolute",
-                top: "8px",
-                right: "8px",
-                background: "rgba(0,0,0,0.6)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "20px",
-                padding: "4px 10px",
-                fontSize: "12px",
-                cursor: "pointer",
-              }}
-            >
-              ✕ Remove
-            </button>
-            <div style={{ fontSize: "12px", color: C.gray, marginTop: "6px" }}>
-              📎 {imageFile.name} ({(imageFile.size / 1024 / 1024).toFixed(1)}{" "}
-              MB)
+          <div className="mb-3">
+            <div className="relative">
+              <img
+                src={imagePreview}
+                alt="Result sheet preview"
+                className="w-full max-h-80 object-contain rounded-xl border border-[#C8E6C9]"
+              />
+              <button
+                onClick={() => onImageChange({ target: { files: [] } })}
+                className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white border-none rounded-full px-2.5 py-1 text-xs cursor-pointer transition-colors duration-150"
+              >
+                ✕ Remove
+              </button>
             </div>
+
+            {/* Upload progress */}
+            <div
+              className={`mt-2 rounded-xl border px-3.5 py-2.5 text-[12px] flex items-center gap-2.5
+              ${
+                uploadState === "done"
+                  ? "bg-green-50 border-[#C8E6C9] text-[#2E7D32]"
+                  : uploadState === "error"
+                    ? "bg-red-50 border-red-200 text-red-700"
+                    : "bg-[#F5F5F5] border-[#E0E0E0] text-[#757575]"
+              }`}
+            >
+              <span>
+                {uploadState === "done"
+                  ? "✅"
+                  : uploadState === "error"
+                    ? "❌"
+                    : uploadState === "uploading"
+                      ? "⏳"
+                      : "📎"}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold truncate">{imageFile?.name}</div>
+                <div className="text-[11px] mt-0.5">
+                  {uploadState === "uploading" &&
+                    `Uploading... ${uploadProgress}%`}
+                  {uploadState === "done" &&
+                    `${(imageFile.size / 1024 / 1024).toFixed(1)} MB · Upload complete`}
+                  {uploadState === "error" &&
+                    "Upload failed — remove and try again"}
+                  {uploadState === "idle" &&
+                    `${(imageFile.size / 1024 / 1024).toFixed(1)} MB`}
+                </div>
+              </div>
+            </div>
+
+            {uploadState === "uploading" && (
+              <div className="mt-1.5 h-1.5 bg-[#E0E0E0] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#4CAF50] rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            )}
           </div>
         ) : (
-          <label
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "40px 24px",
-              border: `2px dashed ${C.border}`,
-              borderRadius: "10px",
-              cursor: "pointer",
-              background: C.bg,
-              transition: "border-color 0.2s",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.accent)}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}
-          >
-            <span style={{ fontSize: "36px", marginBottom: "10px" }}>📷</span>
-            <span
-              style={{
-                fontSize: "14px",
-                fontWeight: 600,
-                color: C.primary,
-                marginBottom: "4px",
-              }}
-            >
+          <label className="flex flex-col items-center justify-center px-6 py-10 border-2 border-dashed border-[#E0E0E0] rounded-xl cursor-pointer bg-[#F5F5F5] hover:border-[#4CAF50] hover:bg-green-50 transition-all duration-150">
+            <span className="text-4xl mb-2.5">📷</span>
+            <span className="text-sm font-semibold text-[#1B5E20] mb-1">
               Click to upload result sheet
             </span>
-            <span style={{ fontSize: "12px", color: C.gray }}>
-              JPEG or PNG · Max 10MB
+            <span className="text-xs text-[#757575]">
+              JPEG or PNG · Max 10MB · Auto-uploads on selection
             </span>
             <input
               type="file"
               accept="image/jpeg,image/png"
               onChange={onImageChange}
-              style={{ display: "none" }}
+              className="hidden"
             />
           </label>
         )}
       </div>
 
-      {/* Notes */}
       <div>
-        <label style={labelStyle}>
+        <Label>
           Notes{" "}
-          <span style={{ color: C.gray, fontWeight: 400 }}>
+          <span className="font-normal text-[#757575]">
             (Optional — max 2,000 characters)
           </span>
-        </label>
+        </Label>
         <textarea
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
           maxLength={2000}
           rows={5}
           placeholder="Add any relevant observations, discrepancies, or context about this polling unit..."
-          style={{
-            width: "100%",
-            padding: "12px 14px",
-            border: `1.5px solid ${C.border}`,
-            borderRadius: "8px",
-            fontSize: "14px",
-            fontFamily: "Poppins, sans-serif",
-            outline: "none",
-            resize: "vertical",
-            boxSizing: "border-box",
-            lineHeight: 1.6,
-          }}
-          onFocus={(e) => (e.target.style.borderColor = C.primary)}
-          onBlur={(e) => (e.target.style.borderColor = C.border)}
+          className="w-full px-3.5 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm outline-none resize-y leading-relaxed focus:border-[#1B5E20] focus:ring-4 focus:ring-[#1B5E20]/8 transition-colors duration-150"
         />
-        <div
-          style={{
-            fontSize: "11px",
-            color: C.gray,
-            textAlign: "right",
-            marginTop: "4px",
-          }}
-        >
+        <p className="text-[11px] text-[#757575] text-right mt-1">
           {notes.length} / 2,000
-        </div>
+        </p>
       </div>
     </div>
   );
 }
-
 // ─────────────────────────────────────────
 // STEP 3 — Review
 // ─────────────────────────────────────────
@@ -946,24 +768,11 @@ function StepReview({
         subtitle="Please verify all details carefully before submitting. You cannot edit this after submission."
       />
 
-      {/* Warning */}
-      <div
-        style={{
-          background: "#FFF8E1",
-          border: "1px solid #FFE082",
-          borderRadius: "8px",
-          padding: "12px 14px",
-          marginBottom: "24px",
-          fontSize: "13px",
-          color: "#5D4037",
-          lineHeight: 1.7,
-        }}
-      >
+      <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 mb-6 text-[13px] text-yellow-900 leading-relaxed">
         ⚠️ Once submitted, results <strong>cannot be edited or deleted</strong>{" "}
         by you. Raise a security report if a correction is needed.
       </div>
 
-      {/* Location summary */}
       <ReviewSection title="Location">
         <ReviewRow label="Election" value={election?.title || "—"} />
         <ReviewRow label="LGA" value={lga} />
@@ -971,36 +780,23 @@ function StepReview({
         <ReviewRow label="Polling Unit" value={pollingUnit} />
       </ReviewSection>
 
-      {/* Votes summary */}
       <ReviewSection title="Votes">
         {candidates.map((c) => (
           <ReviewRow
             key={c.id}
             label={
-              <>
+              <span className="flex items-center gap-1.5">
                 {c.full_name} <PartyBadge party={c.party} />
-              </>
+              </span>
             }
             value={
-              <strong
-                style={{
-                  fontFamily: "Montserrat, sans-serif",
-                  fontSize: "16px",
-                  color: C.primary,
-                }}
-              >
+              <span className="font-[Montserrat,sans-serif] text-base font-extrabold text-[#1B5E20]">
                 {(Number(candidateVotes[c.id]) || 0).toLocaleString()}
-              </strong>
+              </span>
             }
           />
         ))}
-        <div
-          style={{
-            marginTop: "12px",
-            paddingTop: "12px",
-            borderTop: `1px dashed ${C.border}`,
-          }}
-        >
+        <div className="mt-3 pt-3 border-t border-dashed border-[#E0E0E0]">
           <ReviewRow label="Total Votes" value={totalVotes.toLocaleString()} />
           <ReviewRow
             label="Accredited Voters"
@@ -1013,19 +809,16 @@ function StepReview({
         </div>
       </ReviewSection>
 
-      {/* Evidence */}
       <ReviewSection title="Evidence">
         <ReviewRow
           label="Result Sheet Image"
           value={
             imageFile ? (
-              <span style={{ color: C.secondary, fontWeight: 600 }}>
+              <span className="text-[#2E7D32] font-semibold">
                 ✅ {imageFile.name}
               </span>
             ) : (
-              <span style={{ color: C.gray, fontStyle: "italic" }}>
-                No image uploaded
-              </span>
+              <span className="text-[#757575] italic">No image uploaded</span>
             )
           }
         />
@@ -1033,12 +826,12 @@ function StepReview({
           label="Notes"
           value={
             notes ? (
-              <span style={{ color: C.text }}>
+              <span className="text-[#212121]">
                 {notes.substring(0, 80)}
                 {notes.length > 80 ? "..." : ""}
               </span>
             ) : (
-              <span style={{ color: C.gray, fontStyle: "italic" }}>None</span>
+              <span className="text-[#757575] italic">None</span>
             )
           }
         />
@@ -1053,141 +846,69 @@ function StepReview({
 
 function SuccessScreen({ result, onAnother }) {
   return (
-    <div
-      style={{
-        fontFamily: "Poppins, sans-serif",
-        maxWidth: "560px",
-        textAlign: "center",
-        margin: "60px auto",
-      }}
-    >
-      <div style={{ fontSize: "64px", marginBottom: "20px" }}>✅</div>
-      <h2
-        style={{
-          fontFamily: "Montserrat, sans-serif",
-          fontSize: "24px",
-          fontWeight: 800,
-          color: C.primary,
-          marginBottom: "12px",
-        }}
-      >
-        Results Submitted
-      </h2>
-      <p
-        style={{
-          color: C.gray,
-          fontSize: "14px",
-          lineHeight: 1.7,
-          marginBottom: "8px",
-        }}
-      >
-        Results for{" "}
-        <strong style={{ color: C.text }}>{result.pollingUnit}</strong> in{" "}
-        <strong style={{ color: C.text }}>{result.ward}</strong>, {result.lga}{" "}
-        have been recorded successfully.
-      </p>
-      <p style={{ color: C.gray, fontSize: "13px", marginBottom: "32px" }}>
-        The State Admin will review and verify your submission. You cannot edit
-        it — file a security report if a correction is needed.
-      </p>
-      <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-        <a
-          href="/results/lga/results"
-          style={{
-            padding: "12px 24px",
-            background: C.bg,
-            color: C.text,
-            border: `1.5px solid ${C.border}`,
-            borderRadius: "8px",
-            fontSize: "14px",
-            fontWeight: 500,
-            textDecoration: "none",
-          }}
-        >
-          View My Submissions
-        </a>
-        <button
-          onClick={onAnother}
-          style={{
-            padding: "12px 24px",
-            background: C.primary,
-            color: "#fff",
-            border: "none",
-            borderRadius: "8px",
-            fontSize: "14px",
-            fontWeight: 600,
-            cursor: "pointer",
-            fontFamily: "Poppins, sans-serif",
-          }}
-        >
-          Submit Another
-        </button>
+    <div className="p-8 font-[Poppins,sans-serif]">
+      <div className="max-w-[560px] mx-auto text-center mt-16">
+        <div className="text-6xl mb-5">✅</div>
+        <h2 className="font-[Montserrat,sans-serif] text-2xl font-extrabold text-[#1B5E20] mb-3">
+          Results Submitted
+        </h2>
+        <p className="text-sm text-[#757575] leading-relaxed mb-1.5">
+          Results for{" "}
+          <strong className="text-[#212121]">{result.pollingUnit}</strong> in{" "}
+          <strong className="text-[#212121]">{result.ward}</strong>,{" "}
+          {result.lga} have been recorded successfully.
+        </p>
+        <p className="text-[13px] text-[#757575] mb-8">
+          The State Admin will review and verify your submission. File a
+          security report if a correction is needed.
+        </p>
+        <div className="flex gap-3 justify-center">
+          <Link
+            href="/results-portal/lga/results"
+            className="px-6 py-3 bg-[#F5F5F5] text-[#212121] border border-[#E0E0E0] rounded-xl text-sm font-medium no-underline hover:border-[#9E9E9E] transition-colors duration-150"
+          >
+            View My Submissions
+          </Link>
+          <button
+            onClick={onAnother}
+            className="px-6 py-3 bg-[#1B5E20] hover:bg-[#2E7D32] text-white border-none rounded-xl text-sm font-semibold cursor-pointer transition-colors duration-150"
+          >
+            Submit Another
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────
-// SHARED UI
+// SHARED UI PRIMITIVES
 // ─────────────────────────────────────────
 
 function StepIndicator({ steps, current }) {
   return (
-    <div style={{ display: "flex", gap: "0", marginBottom: "8px" }}>
+    <div className="flex mb-2">
       {steps.map((label, i) => {
         const done = i < current;
         const active = i === current;
         return (
-          <div
-            key={label}
-            style={{ display: "flex", alignItems: "center", flex: 1 }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                flex: 1,
-              }}
-            >
+          <div key={label} className="flex items-center flex-1">
+            <div className="flex flex-col items-center flex-1">
               <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "50%",
-                  background: done ? C.accent : active ? C.primary : C.border,
-                  color: done || active ? "#fff" : C.gray,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  transition: "all 0.3s",
-                }}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold transition-all duration-300
+                ${done ? "bg-[#4CAF50] text-white" : active ? "bg-[#1B5E20] text-white" : "bg-[#E0E0E0] text-[#757575]"}`}
               >
                 {done ? "✓" : i + 1}
               </div>
               <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: active ? 700 : 400,
-                  color: active ? C.primary : C.gray,
-                  marginTop: "4px",
-                  whiteSpace: "nowrap",
-                }}
+                className={`text-[11px] mt-1 whitespace-nowrap ${active ? "font-bold text-[#1B5E20]" : "text-[#757575]"}`}
               >
                 {label}
               </div>
             </div>
             {i < steps.length - 1 && (
               <div
-                style={{
-                  height: "2px",
-                  flex: 1,
-                  background: i < current ? C.accent : C.border,
-                  marginBottom: "18px",
-                  transition: "background 0.3s",
-                }}
+                className={`h-0.5 flex-1 mb-[18px] transition-colors duration-300 ${i < current ? "bg-[#4CAF50]" : "bg-[#E0E0E0]"}`}
               />
             )}
           </div>
@@ -1199,68 +920,31 @@ function StepIndicator({ steps, current }) {
 
 function StepTitle({ title, subtitle }) {
   return (
-    <div style={{ marginBottom: "24px" }}>
-      <h2
-        style={{
-          fontFamily: "Montserrat, sans-serif",
-          fontSize: "18px",
-          fontWeight: 800,
-          color: C.primary,
-          margin: "0 0 4px",
-        }}
-      >
+    <div className="mb-6">
+      <h2 className="font-[Montserrat,sans-serif] text-lg font-extrabold text-[#1B5E20] mb-1">
         {title}
       </h2>
-      <p style={{ fontSize: "13px", color: C.gray, margin: 0 }}>{subtitle}</p>
+      <p className="text-[13px] text-[#757575]">{subtitle}</p>
     </div>
   );
 }
 
 function ReviewSection({ title, children }) {
   return (
-    <div style={{ marginBottom: "20px" }}>
-      <div
-        style={{
-          fontSize: "11px",
-          fontWeight: 700,
-          color: C.gray,
-          letterSpacing: "0.8px",
-          textTransform: "uppercase",
-          marginBottom: "10px",
-        }}
-      >
+    <div className="mb-5">
+      <div className="text-[11px] font-bold text-[#757575] tracking-widest uppercase mb-2.5">
         {title}
       </div>
-      <div
-        style={{ background: C.bg, borderRadius: "10px", padding: "14px 16px" }}
-      >
-        {children}
-      </div>
+      <div className="bg-[#F5F5F5] rounded-xl px-4 py-3.5">{children}</div>
     </div>
   );
 }
 
 function ReviewRow({ label, value }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "6px 0",
-        borderBottom: `1px solid ${C.border}`,
-        fontSize: "13px",
-      }}
-    >
-      <span style={{ color: C.gray, fontWeight: 500 }}>{label}</span>
-      <span
-        style={{
-          color: C.text,
-          fontWeight: 600,
-          textAlign: "right",
-          maxWidth: "60%",
-        }}
-      >
+    <div className="flex justify-between items-center py-1.5 border-b border-[#E0E0E0] last:border-b-0 text-[13px]">
+      <span className="text-[#757575] font-medium">{label}</span>
+      <span className="text-[#212121] font-semibold text-right max-w-[60%]">
         {value}
       </span>
     </div>
@@ -1268,84 +952,63 @@ function ReviewRow({ label, value }) {
 }
 
 function PartyBadge({ party }) {
-  const colors = {
-    APC: "#1565C0",
-    PDP: "#C62828",
-    LP: "#F57F17",
-    ADC: "#6A1B9A",
-    NNPP: "#2E7D32",
-    SDP: "#BF360C",
+  const cfg = PARTY_COLORS[party?.toUpperCase()] || {
+    text: "text-gray-700",
+    bg: "bg-gray-100",
   };
-  const bg = {
-    APC: "#E3F2FD",
-    PDP: "#FFEBEE",
-    LP: "#FFF8E1",
-    ADC: "#F3E5F5",
-    NNPP: "#E8F5E9",
-    SDP: "#FBE9E7",
-  };
-  const col = colors[party?.toUpperCase()] || "#616161";
-  const bgCol = bg[party?.toUpperCase()] || "#EEEEEE";
   return (
     <span
-      style={{
-        background: bgCol,
-        color: col,
-        padding: "1px 7px",
-        borderRadius: "4px",
-        fontSize: "11px",
-        fontWeight: 700,
-      }}
+      className={`${cfg.bg} ${cfg.text} px-1.5 py-0.5 rounded text-[11px] font-bold`}
     >
       {party}
     </span>
   );
 }
 
-function Skeleton({ h = 44, mb = 0 }) {
+function Label({ children }) {
   return (
-    <div
-      style={{
-        height: `${h}px`,
-        background: "#EEEEEE",
-        borderRadius: "8px",
-        marginBottom: `${mb}px`,
-      }}
-    />
+    <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+      {children}
+    </label>
   );
 }
 
 function Required() {
-  return <span style={{ color: C.danger }}>*</span>;
+  return <span className="text-red-600">*</span>;
 }
 
-const labelStyle = {
-  display: "block",
-  fontSize: "13px",
-  fontWeight: 600,
-  color: C.text,
-  marginBottom: "8px",
-};
-const inputStyle = {
-  width: "100%",
-  padding: "11px 14px",
-  border: `1.5px solid ${C.border}`,
-  borderRadius: "8px",
-  fontSize: "14px",
-  fontFamily: "Poppins, sans-serif",
-  outline: "none",
-  boxSizing: "border-box",
-  transition: "border-color 0.2s",
-};
-const selectStyle = {
-  width: "100%",
-  padding: "11px 14px",
-  border: `1.5px solid ${C.border}`,
-  borderRadius: "8px",
-  fontSize: "14px",
-  fontFamily: "Poppins, sans-serif",
-  outline: "none",
-  boxSizing: "border-box",
-  background: "#fff",
-  cursor: "pointer",
-};
+function Input({ value, onChange, placeholder, disabled }) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      className={`w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm outline-none focus:border-[#1B5E20] transition-colors duration-150 ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+    />
+  );
+}
+
+function Select({ value, onChange, disabled, children }) {
+  return (
+    <select
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      className={`w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150 cursor-pointer ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+    >
+      {children}
+    </select>
+  );
+}
+
+function Skeleton({ h = "h-11" }) {
+  return <div className={`${h} bg-[#EEEEEE] rounded-xl animate-pulse`} />;
+}
+
+function Spinner() {
+  return (
+    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+  );
+}

@@ -1,12 +1,11 @@
 /**
  * app/results-portal/admin/layout.jsx
- * State Admin shell — auth guard + sidebar.
- * Server component: handles auth via headers(), passes name to Sidebar.
+ * State Admin shell — auth guard + fixed sidebar layout.
  */
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import Sidebar from "./sidebar"; // client component
+import Sidebar from "./sidebar";
 
 export default async function StateAdminLayout({ children }) {
   const hdrs = await headers();
@@ -16,7 +15,7 @@ export default async function StateAdminLayout({ children }) {
   if (!role || role !== "state_admin") redirect("/results-portal/login");
 
   return (
-    <div className="min-h-screen flex bg-[#F0F4F0]">
+    <div className="h-screen flex overflow-hidden bg-[#F0F4F0]">
       {/* Skip link */}
       <a
         href="#erms-main"
@@ -26,31 +25,25 @@ export default async function StateAdminLayout({ children }) {
       </a>
 
       {/* Print-only header */}
-      <div className="hidden print:block print:mb-6">
+      <div className="hidden print:block print:mb-6 print:fixed print:top-0 print:left-0 print:right-0">
         <h1 className="text-lg font-bold">
           Atunluto Group — Election Results Management System
         </h1>
-        <p className="text-sm text-text-gray">
-          Oyo South Senatorial District · Printed{" "}
-          {new Date().toLocaleDateString("en-NG")} · Confidential
+        <p className="text-sm text-[#757575]">
+          Oyo South Senatorial District · Confidential
         </p>
       </div>
 
-      {/* Sidebar — client component, receives name as prop */}
+      {/* Sidebar */}
       <Sidebar name={name} />
 
-      {/* Main */}
+      {/* Main — scrolls independently */}
       <main
         id="erms-main"
-        className="flex-1 min-w-0 overflow-auto print:overflow-visible"
+        className="flex-1 min-w-0 h-screen overflow-y-auto print:overflow-visible"
       >
         {children}
       </main>
-
-      {/* Print footer */}
-      <div className="hidden print:block print:mt-6 print:text-xs print:text-text-gray">
-        Atunluto Group ERMS · Confidential · {new Date().getFullYear()}
-      </div>
     </div>
   );
 }

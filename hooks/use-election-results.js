@@ -1,29 +1,27 @@
 /**
- * lib/hooks/useElectionResults.js
- * React Query hooks for result submission and LGA Admin result viewing
+ * lib/hooks/use-election-results.js
+ * React Query hooks for result submission and LGA Admin result viewing.
+ * All data fetching delegated to server actions — no Supabase client in browser.
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/supabase/client";
-
-const MY_RESULTS_KEY = (adminId) => ["my-results", adminId];
-const LGA_RESULTS_KEY = (electionId) => ["lga-results", electionId];
+import {
+  fetchActiveElections,
+  fetchElectionCandidates,
+  fetchLGAWards,
+  fetchMyResults,
+} from "@/app/actions/results-fetch";
 
 // ─────────────────────────────────────────
-// ACTIVE ELECTIONS (for submission dropdown)
+// ACTIVE ELECTIONS
 // ─────────────────────────────────────────
 
 export function useActiveElections() {
-  const supabase = createClient();
   return useQuery({
     queryKey: ["active-elections"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("elections")
-        .select("id, title, election_type, election_date")
-        .eq("status", "active")
-        .order("election_date", { ascending: false });
-      if (error) throw error;
+      const data = await fetchActiveElections();
+      if (data?.error) throw new Error(data.error);
       return data;
     },
     staleTime: 60_000,
@@ -35,16 +33,11 @@ export function useActiveElections() {
 // ─────────────────────────────────────────
 
 export function useElectionCandidates(electionId) {
-  const supabase = createClient();
   return useQuery({
     queryKey: ["election-candidates", electionId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("candidates")
-        .select("id, full_name, party, position, photo_url")
-        .eq("election_id", electionId)
-        .order("party");
-      if (error) throw error;
+      const data = await fetchElectionCandidates(electionId);
+      if (data?.error) throw new Error(data.error);
       return data;
     },
     enabled: !!electionId,
@@ -53,56 +46,32 @@ export function useElectionCandidates(electionId) {
 }
 
 // ─────────────────────────────────────────
-// LGA WARD DATA (from existing lgas table)
+// LGA WARDS
 // ─────────────────────────────────────────
 
 export function useLGAWards(lga) {
-  const supabase = createClient();
   return useQuery({
     queryKey: ["lga-wards", lga],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("lgas")
-        .select("wards")
-        .eq("name", lga)
-        .single();
-      if (error) throw error;
-      // wards is a JSON array of { name, polling_units: [...] }
-      return data?.wards || [];
+      const data = await fetchLGAWards(lga);
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     enabled: !!lga,
-    staleTime: Infinity, // ward data doesn't change
+    staleTime: Infinity,
   });
 }
 
 // ─────────────────────────────────────────
-// MY SUBMISSIONS (LGA Admin view)
+// MY SUBMISSIONS
 // ─────────────────────────────────────────
 
 export function useMyResults(adminId, electionId) {
-  const supabase = createClient();
   return useQuery({
-    queryKey: [...MY_RESULTS_KEY(adminId), electionId],
+    queryKey: ["my-results", adminId, electionId],
     queryFn: async () => {
-      let query = supabase
-        .from("election_results")
-        .select(
-          `
-          id, lga, ward, polling_unit,
-          votes_cast, accredited_voters, registered_voters,
-          result_image_url, notes, status, submitted_at, checksum,
-          candidate:candidate_id ( id, full_name, party ),
-          election:election_id ( id, title )
-        `,
-        )
-        .eq("submitted_by", adminId)
-        .is("deleted_at", null)
-        .order("submitted_at", { ascending: false });
-
-      if (electionId) query = query.eq("election_id", electionId);
-
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchMyResults(adminId, electionId);
+      if (data?.error) throw new Error(data.error);
       return data;
     },
     enabled: !!adminId,
@@ -119,13 +88,12 @@ export function useSubmitResult() {
   return useMutation({
     mutationFn: async (payload) => {
       const { submitElectionResult } =
-        await import("@/app/actions/resultSubmission");
+        await import("@/app/actions/result-submission");
       const result = await submitElectionResult(payload);
       if (result?.error) throw new Error(result.error);
       return result;
     },
     onSuccess: () => {
-      // Invalidate all result-related queries
       queryClient.invalidateQueries({ queryKey: ["my-results"] });
     },
   });

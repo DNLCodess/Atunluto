@@ -91,7 +91,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="p-8 font-[Poppins,sans-serif] text-[#212121]">
+    <div className="p-8 font-[Poppins,sans-serif] text-text-dark">
       {/* Header */}
       <div className="mb-7">
         <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
@@ -323,7 +323,7 @@ function ReportCard({ report, expanded, onToggle, onUpdate }) {
             </span>
           </div>
           <div
-            className={`text-sm text-[#212121] leading-relaxed ${expanded ? "" : "line-clamp-2"}`}
+            className={`text-sm text-text-dark leading-relaxed ${expanded ? "" : "line-clamp-2"}`}
           >
             {report.description}
           </div>
@@ -350,7 +350,7 @@ function ReportCard({ report, expanded, onToggle, onUpdate }) {
             <div className="text-[11px] font-bold text-text-gray tracking-widest uppercase mb-2">
               Full Description
             </div>
-            <div className="text-sm text-[#212121] leading-relaxed bg-white px-3.5 py-3.5 rounded-lg border border-[#E0E0E0]">
+            <div className="text-sm text-text-dark leading-relaxed bg-white px-3.5 py-3.5 rounded-lg border border-[#E0E0E0]">
               {report.description}
             </div>
           </div>
@@ -378,7 +378,7 @@ function ReportCard({ report, expanded, onToggle, onUpdate }) {
               <div className="text-[11px] font-bold text-[#2E7D32] tracking-widest uppercase mb-1.5">
                 Resolution Notes
               </div>
-              <div className="text-[13px] text-[#212121]">
+              <div className="text-[13px] text-text-dark">
                 {report.resolution_notes}
               </div>
               {report.resolver && (
@@ -468,7 +468,7 @@ function ChecksumPanel() {
 
       {/* Selector */}
       <div className="bg-white rounded-xl border border-[#E0E0E0] p-6">
-        <div className="text-[13px] font-semibold text-[#212121] mb-2.5">
+        <div className="text-[13px] font-semibold text-text-dark mb-2.5">
           Select Election to Scan
         </div>
         <div className="flex gap-3 items-end flex-wrap">
@@ -553,7 +553,7 @@ function ChecksumPanel() {
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-sm font-bold text-[#212121]">
+                      <div className="text-sm font-bold text-text-dark">
                         {m.pollingUnit}
                       </div>
                       <div className="text-xs text-text-gray mt-0.5">
@@ -570,7 +570,7 @@ function ChecksumPanel() {
                       <div className="text-[10px] font-bold text-red-800 uppercase tracking-wide mb-1">
                         Stored Checksum
                       </div>
-                      <div className="font-mono text-[11px] text-[#212121] break-all">
+                      <div className="font-mono text-[11px] text-text-dark break-all">
                         {m.storedChecksum}
                       </div>
                     </div>
@@ -578,7 +578,7 @@ function ChecksumPanel() {
                       <div className="text-[10px] font-bold text-orange-800 uppercase tracking-wide mb-1">
                         Recomputed Checksum
                       </div>
-                      <div className="font-mono text-[11px] text-[#212121] break-all">
+                      <div className="font-mono text-[11px] text-text-dark break-all">
                         {m.recomputedChecksum}
                       </div>
                     </div>
@@ -615,7 +615,7 @@ function EmptyBox({ icon, title, subtitle }) {
   return (
     <div className="bg-white rounded-xl border border-dashed border-[#E0E0E0] p-16 text-center text-text-gray">
       <div className="text-4xl mb-3">{icon}</div>
-      <div className="text-[15px] font-semibold text-[#212121] mb-1.5">
+      <div className="text-[15px] font-semibold text-text-dark mb-1.5">
         {title}
       </div>
       <div className="text-[13px]">{subtitle}</div>

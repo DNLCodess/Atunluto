@@ -213,7 +213,7 @@ export default function ResultsLoginPage() {
               <div>
                 <label
                   htmlFor="email"
-                  className="block text-[12px] font-bold text-[#212121] mb-2 tracking-wide uppercase"
+                  className="block text-[12px] font-bold text-text-dark mb-2 tracking-wide uppercase"
                 >
                   Email Address
                 </label>
@@ -224,7 +224,7 @@ export default function ResultsLoginPage() {
                   required
                   autoComplete="email"
                   placeholder="admin@atunluto.org"
-                  className="w-full px-4 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm text-[#212121] outline-none transition-all duration-200 placeholder:text-[#BDBDBD] focus:border-[#1B5E20] focus:ring-4 focus:ring-[#1B5E20]/8 bg-[#FAFAFA] focus:bg-white"
+                  className="w-full px-4 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm text-text-dark outline-none transition-all duration-200 placeholder:text-[#BDBDBD] focus:border-[#1B5E20] focus:ring-4 focus:ring-[#1B5E20]/8 bg-[#FAFAFA] focus:bg-white"
                 />
               </div>
 
@@ -232,7 +232,7 @@ export default function ResultsLoginPage() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-[12px] font-bold text-[#212121] mb-2 tracking-wide uppercase"
+                  className="block text-[12px] font-bold text-text-dark mb-2 tracking-wide uppercase"
                 >
                   Password
                 </label>
@@ -244,7 +244,7 @@ export default function ResultsLoginPage() {
                     required
                     autoComplete="current-password"
                     placeholder="Enter your password"
-                    className="w-full pl-4 pr-12 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm text-[#212121] outline-none transition-all duration-200 placeholder:text-[#BDBDBD] focus:border-[#1B5E20] focus:ring-4 focus:ring-[#1B5E20]/8 bg-[#FAFAFA] focus:bg-white"
+                    className="w-full pl-4 pr-12 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm text-text-dark outline-none transition-all duration-200 placeholder:text-[#BDBDBD] focus:border-[#1B5E20] focus:ring-4 focus:ring-[#1B5E20]/8 bg-[#FAFAFA] focus:bg-white"
                   />
                   <button
                     type="button"

@@ -1,39 +1,23 @@
 "use client";
 
-/**
- * app/results/lga/results/page.jsx
- * LGA Admin — read-only view of their own submissions.
- */
-
-import { useState } from "react";
-import { useMyResults } from "@/hooks/use-election-results";
-import { useActiveElections } from "@/hooks/use-election-results";
-
-const C = {
-  primary: "#1B5E20",
-  secondary: "#2E7D32",
-  accent: "#4CAF50",
-  light: "#C8E6C9",
-  text: "#212121",
-  gray: "#757575",
-  border: "#E0E0E0",
-  bg: "#F5F5F5",
-  white: "#FFFFFF",
-  danger: "#C62828",
-};
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useMyResults, useActiveElections } from "@/hooks/use-election-results";
 
 const STATUS_STYLE = {
-  pending: { label: "Pending", bg: "#E3F2FD", color: "#1565C0" },
-  verified: { label: "Verified", bg: "#E8F5E9", color: "#2E7D32" },
-  disputed: { label: "Disputed", bg: "#FFEBEE", color: "#C62828" },
+  pending: { label: "Pending", bg: "bg-blue-50", color: "text-blue-800" },
+  verified: { label: "Verified", bg: "bg-green-50", color: "text-green-800" },
+  disputed: { label: "Disputed", bg: "bg-red-50", color: "text-red-800" },
 };
 
 export default function MyResultsPage() {
-  // adminId comes from session — injected via a server component wrapper or cookie
-  const adminId =
-    typeof document !== "undefined"
-      ? document.documentElement.dataset.ermsId || ""
-      : "";
+  const [adminId, setAdminId] = useState("");
+
+  useEffect(() => {
+    const val =
+      document.querySelector("main[data-erms-id]")?.dataset?.ermsId || "";
+    setAdminId(val);
+  }, []);
 
   const [electionFilter, setElectionFilter] = useState("");
   const [expandedId, setExpandedId] = useState(null);
@@ -45,7 +29,6 @@ export default function MyResultsPage() {
     isError,
   } = useMyResults(adminId, electionFilter || undefined);
 
-  // Group results by polling unit for cleaner display
   const grouped = groupByPollingUnit(results);
 
   const stats = {
@@ -56,92 +39,51 @@ export default function MyResultsPage() {
   };
 
   return (
-    <div style={{ fontFamily: "Poppins, sans-serif", color: C.text }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: "32px",
-        }}
-      >
+    <div className="p-8 font-[Poppins,sans-serif] text-text-dark">
+      {/* Header */}
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h1
-            style={{
-              fontFamily: "Montserrat, sans-serif",
-              fontSize: "26px",
-              fontWeight: 800,
-              color: C.primary,
-              margin: "0 0 6px",
-            }}
-          >
+          <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
             My Submissions
           </h1>
-          <p style={{ color: C.gray, fontSize: "14px", margin: 0 }}>
+          <p className="text-sm text-[#757575]">
             Read-only record of all results you have submitted
           </p>
         </div>
-        <a
-          href="/results/lga/submit"
-          style={{
-            background: C.primary,
-            color: "#fff",
-            textDecoration: "none",
-            borderRadius: "10px",
-            padding: "12px 24px",
-            fontSize: "14px",
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
+        <Link
+          href="/results-portal/lga/submit"
+          className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white no-underline rounded-xl px-6 py-3 text-sm font-semibold flex items-center gap-2 transition-colors duration-150"
         >
           + Submit New Result
-        </a>
+        </Link>
       </div>
 
       {/* Stats */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "14px",
-          marginBottom: "24px",
-        }}
-      >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
         {[
-          { label: "Total Submitted", value: stats.total, color: C.primary },
-          { label: "Pending Review", value: stats.pending, color: "#1565C0" },
-          { label: "Verified", value: stats.verified, color: C.secondary },
-          { label: "Disputed", value: stats.disputed, color: C.danger },
+          {
+            label: "Total Submitted",
+            value: stats.total,
+            color: "text-[#1B5E20]",
+          },
+          {
+            label: "Pending Review",
+            value: stats.pending,
+            color: "text-blue-800",
+          },
+          { label: "Verified", value: stats.verified, color: "text-[#2E7D32]" },
+          { label: "Disputed", value: stats.disputed, color: "text-red-700" },
         ].map(({ label, value, color }) => (
           <div
             key={label}
-            style={{
-              background: C.white,
-              borderRadius: "12px",
-              padding: "18px 20px",
-              border: `1px solid ${C.border}`,
-            }}
+            className="bg-white rounded-xl px-5 py-4.5 border border-[#E0E0E0]"
           >
             <div
-              style={{
-                fontSize: "26px",
-                fontWeight: 800,
-                color,
-                fontFamily: "Montserrat, sans-serif",
-              }}
+              className={`font-[Montserrat,sans-serif] text-[26px] font-extrabold ${color}`}
             >
               {value}
             </div>
-            <div
-              style={{
-                fontSize: "12px",
-                color: C.gray,
-                fontWeight: 600,
-                marginTop: "2px",
-              }}
-            >
+            <div className="text-xs text-[#757575] font-semibold mt-0.5">
               {label}
             </div>
           </div>
@@ -149,41 +91,14 @@ export default function MyResultsPage() {
       </div>
 
       {/* Filter */}
-      <div
-        style={{
-          background: C.white,
-          borderRadius: "10px",
-          border: `1px solid ${C.border}`,
-          padding: "14px 20px",
-          marginBottom: "20px",
-          display: "flex",
-          gap: "12px",
-          alignItems: "center",
-        }}
-      >
-        <label
-          style={{
-            fontSize: "13px",
-            fontWeight: 600,
-            color: C.text,
-            whiteSpace: "nowrap",
-          }}
-        >
+      <div className="bg-white rounded-xl border border-[#E0E0E0] px-5 py-3.5 mb-5 flex gap-3 items-center flex-wrap">
+        <label className="text-[13px] font-semibold text-text-dark whitespace-nowrap">
           Filter by Election:
         </label>
         <select
           value={electionFilter}
           onChange={(e) => setElectionFilter(e.target.value)}
-          style={{
-            flex: 1,
-            padding: "8px 12px",
-            border: `1.5px solid ${C.border}`,
-            borderRadius: "8px",
-            fontSize: "13px",
-            fontFamily: "Poppins, sans-serif",
-            outline: "none",
-            background: C.white,
-          }}
+          className="flex-1 min-w-[200px] px-3 py-2 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150 cursor-pointer"
         >
           <option value="">All Elections</option>
           {elections.map((e) => (
@@ -192,100 +107,59 @@ export default function MyResultsPage() {
             </option>
           ))}
         </select>
-        <div style={{ fontSize: "13px", color: C.gray }}>
+        <div className="text-[13px] text-[#757575]">
           {grouped.length} polling unit{grouped.length !== 1 ? "s" : ""}
         </div>
       </div>
 
       {/* Disputed warning */}
       {stats.disputed > 0 && (
-        <div
-          style={{
-            background: "#FFEBEE",
-            border: "1px solid #FFCDD2",
-            borderRadius: "10px",
-            padding: "14px 18px",
-            marginBottom: "20px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            fontSize: "13px",
-            color: C.danger,
-          }}
-        >
-          <span style={{ fontSize: "20px" }}>⚠️</span>
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3.5 mb-5 flex items-center gap-2.5 text-[13px] text-red-800">
+          <span className="text-xl shrink-0">⚠️</span>
           <div>
             <strong>
               {stats.disputed} submission{stats.disputed > 1 ? "s" : ""} flagged
               as disputed
             </strong>{" "}
             by the State Admin. Please{" "}
-            <a
-              href="/results/lga/report"
-              style={{ color: C.danger, fontWeight: 700 }}
+            <Link
+              href="/results-portal/lga/report"
+              className="text-red-800 font-bold underline"
             >
               file a security report
-            </a>{" "}
+            </Link>{" "}
             if you have concerns.
           </div>
         </div>
       )}
 
       {/* Results list */}
-      <div
-        style={{
-          background: C.white,
-          borderRadius: "12px",
-          border: `1px solid ${C.border}`,
-          overflow: "hidden",
-        }}
-      >
+      <div className="bg-white rounded-xl border border-[#E0E0E0] overflow-hidden">
         {isLoading ? (
-          <div style={{ padding: "24px" }}>
+          <div className="p-6 space-y-2">
             {[...Array(4)].map((_, i) => (
               <div
                 key={i}
-                style={{
-                  height: "70px",
-                  background: C.bg,
-                  borderRadius: "8px",
-                  marginBottom: "8px",
-                }}
+                className="h-[70px] bg-[#F5F5F5] rounded-lg animate-pulse"
               />
             ))}
           </div>
         ) : isError ? (
-          <div
-            style={{
-              padding: "40px",
-              textAlign: "center",
-              color: C.danger,
-              fontSize: "14px",
-            }}
-          >
+          <div className="py-10 text-center text-sm text-red-700">
             Failed to load submissions. Please refresh.
           </div>
         ) : grouped.length === 0 ? (
-          <div style={{ padding: "60px", textAlign: "center" }}>
-            <div style={{ fontSize: "40px", marginBottom: "14px" }}>📋</div>
-            <div
-              style={{
-                fontSize: "16px",
-                fontWeight: 600,
-                color: C.text,
-                marginBottom: "8px",
-              }}
-            >
+          <div className="py-16 px-6 text-center">
+            <div className="text-4xl mb-3.5">📋</div>
+            <div className="text-base font-semibold text-text-dark mb-2">
               No submissions yet
             </div>
-            <div style={{ fontSize: "13px", color: C.gray }}>
-              <a
-                href="/results/lga/submit"
-                style={{ color: C.secondary, fontWeight: 600 }}
-              >
-                Submit your first result
-              </a>
-            </div>
+            <Link
+              href="/results-portal/lga/submit"
+              className="text-[13px] text-[#2E7D32] font-semibold no-underline hover:underline"
+            >
+              Submit your first result
+            </Link>
           </div>
         ) : (
           grouped.map((group) => (
@@ -303,24 +177,14 @@ export default function MyResultsPage() {
 
       {/* Immutability notice */}
       {results.length > 0 && (
-        <div
-          style={{
-            marginTop: "16px",
-            padding: "12px 16px",
-            background: C.bg,
-            borderRadius: "8px",
-            fontSize: "12px",
-            color: C.gray,
-            textAlign: "center",
-          }}
-        >
+        <div className="mt-4 px-4 py-3 bg-[#F5F5F5] rounded-lg text-xs text-[#757575] text-center">
           🔒 Submitted results cannot be edited. To request a correction,{" "}
-          <a
-            href="/results/lga/report"
-            style={{ color: C.secondary, fontWeight: 600 }}
+          <Link
+            href="/results-portal/lga/report"
+            className="text-[#2E7D32] font-semibold no-underline hover:underline"
           >
             file a security report
-          </a>
+          </Link>
           .
         </div>
       )}
@@ -329,7 +193,7 @@ export default function MyResultsPage() {
 }
 
 // ─────────────────────────────────────────
-// POLLING UNIT GROUP (collapsible)
+// POLLING UNIT GROUP
 // ─────────────────────────────────────────
 
 function PollingUnitGroup({ group, expanded, onToggle }) {
@@ -337,140 +201,68 @@ function PollingUnitGroup({ group, expanded, onToggle }) {
   const firstEntry = group.entries[0];
 
   return (
-    <div style={{ borderBottom: `1px solid ${C.border}` }}>
+    <div className="border-b border-[#E0E0E0] last:border-b-0">
       {/* Group header */}
       <div
         onClick={onToggle}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "16px",
-          padding: "16px 24px",
-          cursor: "pointer",
-          background: expanded ? "#F1F8E9" : C.white,
-          transition: "background 0.15s",
-        }}
+        className={`flex items-center gap-4 px-6 py-4 cursor-pointer transition-colors duration-150
+          ${expanded ? "bg-green-50" : "bg-white hover:bg-[#FAFAFA]"}`}
       >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ fontSize: "14px", fontWeight: 700, color: C.text }}>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap mb-1">
+            <span className="text-sm font-bold text-text-dark">
               {group.pollingUnit}
             </span>
             <span
-              style={{
-                background: statusCfg.bg,
-                color: statusCfg.color,
-                padding: "2px 8px",
-                borderRadius: "20px",
-                fontSize: "11px",
-                fontWeight: 700,
-              }}
+              className={`${statusCfg.bg} ${statusCfg.color} px-2.5 py-0.5 rounded-full text-[11px] font-bold`}
             >
               {statusCfg.label}
             </span>
             {group.hasImage && (
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: C.secondary,
-                  fontWeight: 600,
-                }}
-              >
+              <span className="text-[11px] text-[#2E7D32] font-semibold">
                 📎 Image attached
               </span>
             )}
           </div>
-          <div style={{ fontSize: "12px", color: C.gray, marginTop: "3px" }}>
+          <div className="text-xs text-[#757575]">
             {group.ward} · {firstEntry?.election?.title} · Submitted{" "}
             {formatDate(firstEntry?.submitted_at)}
           </div>
         </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ textAlign: "right" }}>
-            <div
-              style={{
-                fontSize: "18px",
-                fontWeight: 800,
-                color: C.primary,
-                fontFamily: "Montserrat, sans-serif",
-              }}
-            >
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-right">
+            <div className="font-[Montserrat,sans-serif] text-lg font-extrabold text-[#1B5E20]">
               {group.totalVotes.toLocaleString()}
             </div>
-            <div style={{ fontSize: "11px", color: C.gray }}>total votes</div>
+            <div className="text-[11px] text-[#757575]">total votes</div>
           </div>
           <span
-            style={{
-              color: C.gray,
-              fontSize: "18px",
-              transition: "transform 0.2s",
-              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-            }}
+            className={`text-[#757575] text-lg transition-transform duration-200 ${expanded ? "rotate-180" : "rotate-0"}`}
           >
             ▾
           </span>
         </div>
       </div>
 
-      {/* Expanded detail */}
+      {/* Expanded */}
       {expanded && (
-        <div style={{ padding: "0 24px 20px", background: "#FAFAFA" }}>
+        <div className="px-6 pb-5 bg-[#FAFAFA]">
           {/* Candidate breakdown */}
-          <div style={{ marginBottom: "16px" }}>
+          <div className="mb-4">
             {group.entries.map((entry) => (
               <div
                 key={entry.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 0",
-                  borderBottom: `1px solid ${C.border}`,
-                }}
+                className="flex justify-between items-center py-2.5 border-b border-[#E0E0E0]"
               >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
-                >
-                  <span
-                    style={{ fontSize: "13px", fontWeight: 600, color: C.text }}
-                  >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[13px] font-semibold text-text-dark">
                     {entry.candidate?.full_name}
                   </span>
-                  <span
-                    style={{
-                      background: "#EEE",
-                      color: C.gray,
-                      padding: "1px 6px",
-                      borderRadius: "4px",
-                      fontSize: "11px",
-                      fontWeight: 700,
-                    }}
-                  >
+                  <span className="bg-[#EEEEEE] text-[#757575] px-1.5 py-0.5 rounded text-[11px] font-bold">
                     {entry.candidate?.party}
                   </span>
                 </div>
-                <span
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: 800,
-                    color: C.primary,
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
-                >
+                <span className="font-[Montserrat,sans-serif] text-lg font-extrabold text-[#1B5E20]">
                   {entry.votes_cast.toLocaleString()}
                 </span>
               </div>
@@ -478,14 +270,7 @@ function PollingUnitGroup({ group, expanded, onToggle }) {
           </div>
 
           {/* Voter counts */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "10px",
-              marginBottom: "14px",
-            }}
-          >
+          <div className="grid grid-cols-3 gap-2.5 mb-3.5">
             {[
               { label: "Accredited", value: firstEntry?.accredited_voters },
               { label: "Registered", value: firstEntry?.registered_voters },
@@ -493,58 +278,25 @@ function PollingUnitGroup({ group, expanded, onToggle }) {
             ].map(({ label, value }) => (
               <div
                 key={label}
-                style={{
-                  background: C.white,
-                  borderRadius: "8px",
-                  padding: "10px 12px",
-                  textAlign: "center",
-                  border: `1px solid ${C.border}`,
-                }}
+                className="bg-white rounded-lg px-3 py-2.5 text-center border border-[#E0E0E0]"
               >
-                <div
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: 700,
-                    color: C.primary,
-                    fontFamily: "Montserrat, sans-serif",
-                  }}
-                >
+                <div className="font-[Montserrat,sans-serif] text-base font-bold text-[#1B5E20]">
                   {(value || 0).toLocaleString()}
                 </div>
-                <div
-                  style={{ fontSize: "11px", color: C.gray, marginTop: "2px" }}
-                >
-                  {label}
-                </div>
+                <div className="text-[11px] text-[#757575] mt-0.5">{label}</div>
               </div>
             ))}
           </div>
 
           {/* Notes */}
           {firstEntry?.notes && (
-            <div
-              style={{
-                background: "#FFF8E1",
-                borderRadius: "8px",
-                padding: "10px 14px",
-                fontSize: "13px",
-                color: "#5D4037",
-                lineHeight: 1.6,
-              }}
-            >
+            <div className="bg-yellow-50 rounded-lg px-3.5 py-2.5 text-[13px] text-yellow-900 leading-relaxed">
               <strong>Notes:</strong> {firstEntry.notes}
             </div>
           )}
 
-          {/* Checksum reference */}
-          <div
-            style={{
-              marginTop: "12px",
-              fontSize: "11px",
-              color: "#BDBDBD",
-              fontFamily: "monospace",
-            }}
-          >
+          {/* Checksum */}
+          <div className="mt-3 text-[11px] text-[#BDBDBD] font-mono">
             Checksum: {firstEntry?.checksum?.substring(0, 20)}...
           </div>
         </div>

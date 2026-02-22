@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * app/actions/electionsActions.js
+ * app/actions/elections.js
  */
 
 import { createAdminClient } from "@/supabase/admin";
@@ -120,7 +120,8 @@ export async function addCandidate(payload) {
   if (!session || session.role !== "state_admin")
     return { error: "Unauthorised." };
 
-  const { electionId, full_name, party, position, lga, photoFile } = payload;
+  const { electionId, full_name, party, position, lga, photoPath } = payload;
+  // photoPath is the storage path string e.g. "candidates/1234-abc.png"
 
   if (!electionId) return { error: "Election ID is required." };
   if (!full_name?.trim()) return { error: "Candidate name is required." };
@@ -136,28 +137,21 @@ export async function addCandidate(payload) {
     .single();
 
   if (!election) return { error: "Election not found." };
-  if (election.status === "concluded") {
+  if (election.status === "concluded")
     return { error: "Cannot add candidates to a concluded election." };
-  }
 
+  // Generate signed read URL now — file is already uploaded at this point
   let photo_url = null;
-  if (photoFile && photoFile.size > 0) {
-    const ext = photoFile.name.split(".").pop().toLowerCase();
-    const filename = `candidates/${electionId}/${Date.now()}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
+  if (photoPath) {
+    const { data: readData, error: readError } = await supabase.storage
       .from("results-images")
-      .upload(filename, photoFile, {
-        contentType: photoFile.type,
-        upsert: false,
-      });
+      .createSignedUrl(photoPath, 60 * 60 * 24 * 365); // 1 year
 
-    if (!uploadError) {
-      const { data: urlData } = supabase.storage
-        .from("results-images")
-        .getPublicUrl(filename);
-      photo_url = urlData?.publicUrl || null;
+    if (readError) {
+      console.error("[ERMS] createSignedUrl error:", readError);
+      return { error: "Failed to generate photo URL. Please try again." };
     }
+    photo_url = readData.signedUrl;
   }
 
   const { data, error } = await supabase
@@ -236,4 +230,34 @@ export async function fetchCandidates(electionId) {
 
   if (error) return { error: error.message };
   return data;
+}
+// Add this new export to elections.js
+
+export async function getCandidatePhotoUploadUrl({
+  fileName,
+  fileType,
+  fileSize,
+}) {
+  const session = await getResultsSession();
+  if (!session || session.role !== "state_admin")
+    return { error: "Unauthorised." };
+
+  if (fileSize > 5 * 1024 * 1024) return { error: "Photo must be under 5MB." };
+
+  const ALLOWED = ["image/jpeg", "image/png"];
+  if (!ALLOWED.includes(fileType))
+    return { error: "Only JPEG and PNG are allowed." };
+
+  const ext = fileName.split(".").pop().toLowerCase();
+  const path = `candidates/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase.storage
+    .from("results-images")
+    .createSignedUploadUrl(path);
+
+  if (error) return { error: "Failed to generate upload URL." };
+
+  // Return path so addCandidate can generate the read URL after upload
+  return { uploadUrl: data.signedUrl, path };
 }

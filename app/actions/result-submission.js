@@ -10,6 +10,7 @@ import { createClient } from "@/supabase/server";
 import { getResultsSession } from "@/app/actions/election-auth";
 import { computeResultChecksum } from "@/utils/results-checksum";
 import { headers } from "next/headers";
+import { createAdminClient } from "@/supabase/admin";
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const VALID_LGAS = [
@@ -24,201 +25,141 @@ const VALID_LGAS = [
   "Ido",
 ];
 
-export async function submitElectionResult(payload) {
-  // ── Auth ────────────────────────────────
+export async function getResultImageUploadUrl({
+  fileName,
+  fileType,
+  fileSize,
+}) {
   const session = await getResultsSession();
-  if (!session || session.role !== "lga_admin") {
-    return { error: "Unauthorised. Only LGA Admins can submit results." };
-  }
-  if (!session.is_active) {
-    return { error: "Your account is deactivated. Contact the State Admin." };
-  }
+  if (!session || session.role !== "lga_admin")
+    return { error: "Unauthorised." };
+
+  if (fileSize > 10 * 1024 * 1024)
+    return { error: "Image must be under 10MB." };
+
+  const ALLOWED = ["image/jpeg", "image/png"];
+  if (!ALLOWED.includes(fileType))
+    return { error: "Only JPEG and PNG are allowed." };
+
+  const ext = fileName.split(".").pop().toLowerCase();
+  const path = `${session.lga}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase.storage
+    .from("results-images")
+    .createSignedUploadUrl(path);
+
+  if (error) return { error: "Failed to generate upload URL." };
+
+  return { uploadUrl: data.signedUrl, path };
+}
+
+export async function submitElectionResult(payload) {
+  const session = await getResultsSession();
+  if (!session || session.role !== "lga_admin")
+    return { error: "Unauthorised." };
 
   const {
     electionId,
     ward,
     pollingUnit,
-    candidateVotes, // [{ candidateId, votes }]
+    candidateVotes,
     accreditedVoters,
     registeredVoters,
     notes,
-    imageFile,
+    imagePath,
   } = payload;
+  // imagePath is a storage path string — file was uploaded directly by browser
 
-  // ── Validate required fields ────────────
   if (!electionId) return { error: "Election is required." };
   if (!ward?.trim()) return { error: "Ward is required." };
   if (!pollingUnit?.trim()) return { error: "Polling unit is required." };
-  if (!candidateVotes?.length)
-    return { error: "At least one candidate vote entry is required." };
-  if (accreditedVoters == null || accreditedVoters < 0)
-    return { error: "Accredited voters count is required." };
-  if (registeredVoters == null || registeredVoters < 0)
-    return { error: "Registered voters count is required." };
+  if (!Array.isArray(candidateVotes) || candidateVotes.length === 0)
+    return { error: "Candidate votes are required." };
 
-  const lga = session.lga;
-  if (!VALID_LGAS.includes(lga))
-    return { error: "Invalid LGA on your account." };
+  const supabase = createAdminClient();
+  const hdrs = await headers();
 
-  const supabase = createClient();
-  const ipAddress = (await headers()).get("x-forwarded-for") || "unknown";
-  const userAgent = (await headers()).get("user-agent") || "unknown";
-
-  // ── Validate election is active ─────────
+  // Verify election is still active
   const { data: election } = await supabase
     .from("elections")
-    .select("id, status, title")
+    .select("status")
     .eq("id", electionId)
     .single();
 
   if (!election) return { error: "Election not found." };
-  if (election.status !== "active") {
-    return {
-      error: `Results can only be submitted for active elections. This election is "${election.status}".`,
-    };
-  }
+  if (election.status !== "active")
+    return { error: "This election is no longer accepting submissions." };
 
-  // ── Validate votes ──────────────────────
-  for (const { candidateId, votes } of candidateVotes) {
-    if (!candidateId) return { error: "Invalid candidate in submission." };
-    if (votes == null || votes < 0)
-      return { error: "Votes cannot be negative." };
-    if (!Number.isInteger(Number(votes)))
-      return { error: "Votes must be whole numbers." };
-  }
+  // Generate signed read URL for the already-uploaded image
+  let result_image_url = null;
+  let result_image_path = null;
 
-  const totalVotes = candidateVotes.reduce(
-    (sum, { votes }) => sum + Number(votes),
-    0,
-  );
-  if (totalVotes > Number(accreditedVoters)) {
-    return {
-      error: `Total votes cast (${totalVotes}) cannot exceed accredited voters (${accreditedVoters}).`,
-    };
-  }
-
-  // ── Check for duplicate submission ──────
-  // Same election + LGA + ward + polling_unit should not already exist (active)
-  const { count: dupeCount } = await supabase
-    .from("election_results")
-    .select("*", { count: "exact", head: true })
-    .eq("election_id", electionId)
-    .eq("lga", lga)
-    .eq("ward", ward.trim())
-    .eq("polling_unit", pollingUnit.trim())
-    .is("deleted_at", null);
-
-  if (dupeCount > 0) {
-    return {
-      error: `A result for ${pollingUnit} (${ward}) has already been submitted for this election. File a security report if a correction is needed.`,
-    };
-  }
-
-  // ── Image upload ────────────────────────
-  let resultImageUrl = null;
-  let resultImagePath = null;
-
-  if (imageFile && imageFile.size > 0) {
-    if (imageFile.size > MAX_IMAGE_SIZE) {
-      return { error: "Image must be under 10MB." };
-    }
-    if (!["image/jpeg", "image/png"].includes(imageFile.type)) {
-      return { error: "Only JPEG and PNG images are accepted." };
-    }
-
-    const ext = imageFile.type === "image/png" ? "png" : "jpg";
-    const filename = `${lga.replace(/\s+/g, "-")}/${electionId}/${pollingUnit.replace(/\s+/g, "-")}/${Date.now()}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage
+  if (imagePath) {
+    const { data: readData, error: readError } = await supabase.storage
       .from("results-images")
-      .upload(filename, imageFile, {
-        contentType: imageFile.type,
-        upsert: false,
-      });
+      .createSignedUrl(imagePath, 60 * 60 * 24 * 365); // 1 year
 
-    if (uploadError) {
-      console.error("[ERMS] Image upload error:", uploadError);
-      return {
-        error: "Failed to upload result sheet image. Please try again.",
-      };
+    if (readError) {
+      console.error("[ERMS] createSignedUrl error:", readError);
+      return { error: "Failed to process uploaded image. Please try again." };
     }
-
-    resultImagePath = filename;
-
-    // Signed URL (1hr expiry) — images are not public
-    const { data: signedData } = await supabase.storage
-      .from("results-images")
-      .createSignedUrl(filename, 3600);
-
-    resultImageUrl = signedData?.signedUrl || null;
+    result_image_url = readData.signedUrl;
+    result_image_path = imagePath;
   }
 
-  // ── Compute checksum + insert rows ──────
-  const insertedIds = [];
-  const errors = [];
+  // Insert one row per candidate
+  const insertRows = candidateVotes.map(({ candidateId, votes }) => ({
+    election_id: electionId,
+    lga: session.lga,
+    ward: ward.trim(),
+    polling_unit: pollingUnit.trim(),
+    candidate_id: candidateId,
+    votes_cast: votes,
+    accredited_voters: Number(accreditedVoters),
+    registered_voters: Number(registeredVoters),
+    result_image_url,
+    result_image_path,
+    notes: notes?.trim() || null,
+    status: "pending",
+    submitted_by: session.id,
+  }));
 
-  for (const { candidateId, votes } of candidateVotes) {
-    const checksum = await computeResultChecksum({
-      electionId,
-      candidateId,
-      lga,
-      ward: ward.trim(),
-      pollingUnit: pollingUnit.trim(),
-      votesCast: Number(votes),
-      accreditedVoters: Number(accreditedVoters),
-      registeredVoters: Number(registeredVoters),
+  // Compute checksums per row
+  for (const row of insertRows) {
+    row.checksum = await computeResultChecksum({
+      electionId: row.election_id,
+      candidateId: row.candidate_id,
+      lga: row.lga,
+      ward: row.ward,
+      pollingUnit: row.polling_unit,
+      votesCast: row.votes_cast,
+      accreditedVoters: row.accredited_voters,
+      registeredVoters: row.registered_voters,
     });
-
-    const { data: row, error: insertError } = await supabase
-      .from("election_results")
-      .insert({
-        election_id: electionId,
-        lga,
-        ward: ward.trim(),
-        polling_unit: pollingUnit.trim(),
-        candidate_id: candidateId,
-        votes_cast: Number(votes),
-        accredited_voters: Number(accreditedVoters),
-        registered_voters: Number(registeredVoters),
-        result_image_url: resultImageUrl,
-        result_image_path: resultImagePath,
-        checksum,
-        notes: notes?.trim() || null,
-        status: "pending",
-        submitted_by: session.id,
-      })
-      .select("id")
-      .single();
-
-    if (insertError) {
-      console.error("[ERMS] Result insert error:", insertError);
-      errors.push(candidateId);
-    } else {
-      insertedIds.push(row.id);
-    }
   }
 
-  if (errors.length > 0) {
-    return {
-      error: `Submission partially failed for ${errors.length} candidate(s). Please retry.`,
-    };
+  const { error } = await supabase.from("election_results").insert(insertRows);
+
+  if (error) {
+    console.error("[ERMS] submitElectionResult error:", error);
+    return { error: "Failed to submit results. Please try again." };
   }
 
-  // ── Log submission event ────────────────
   await supabase.from("result_audit_log").insert({
     action: "INSERT",
     table_name: "election_results",
+    record_id: null,
     performed_by: session.id,
-    ip_address: ipAddress,
-    user_agent: userAgent,
-    notes: `Submitted results for ${pollingUnit} (${ward}, ${lga}) — ${electionId}`,
+    ip_address: hdrs.get("x-forwarded-for") || "unknown",
+    user_agent: hdrs.get("user-agent") || "unknown",
+    notes: `Results submitted for ${ward} — ${pollingUnit} (${candidateVotes.length} candidates)`,
   });
 
   return {
     success: true,
-    insertedIds,
     pollingUnit: pollingUnit.trim(),
     ward: ward.trim(),
-    lga,
+    lga: session.lga,
   };
 }

@@ -86,7 +86,7 @@ export default function LGAAdminsPage() {
   }
 
   return (
-    <div className="font-[Poppins,sans-serif] text-text-dark">
+    <div className="font-[Poppins,sans-serif] text-text-dark p-8">
       {/* Page header */}
       <div className="flex justify-between items-start mb-8">
         <div>

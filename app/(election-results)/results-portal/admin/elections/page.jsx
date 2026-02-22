@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   useElections,
   useCreateElection,
@@ -114,7 +114,7 @@ export default function ElectionsPage() {
   }
 
   return (
-    <div className="p-8 font-[Poppins,sans-serif] text-[#212121]">
+    <div className="p-8 font-[Poppins,sans-serif] text-text-dark">
       {/* Header */}
       <div className="flex justify-between items-start mb-8">
         <div>
@@ -156,7 +156,7 @@ export default function ElectionsPage() {
               <div className="text-3xl mb-2.5">🗳️</div>
               No elections registered yet.
               <br />
-              Click "Register Election" to begin.
+              Click &quot;Register Election&quot; to begin.
             </div>
           ) : (
             elections.map((election) => {
@@ -171,7 +171,7 @@ export default function ElectionsPage() {
                 >
                   <div className="flex justify-between items-start gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-[#212121] mb-1 truncate">
+                      <div className="text-sm font-semibold text-text-dark mb-1 truncate">
                         {election.title}
                       </div>
                       <div className="text-xs text-text-gray">
@@ -314,7 +314,7 @@ function ElectionDetail({
               className={`px-5 py-2.5 rounded-lg text-[13px] font-semibold border cursor-pointer transition-colors duration-150
                 ${
                   election.is_public
-                    ? "bg-gray-100 text-[#212121] border-[#E0E0E0] hover:bg-gray-200"
+                    ? "bg-gray-100 text-text-dark border-[#E0E0E0] hover:bg-gray-200"
                     : "bg-[#1B5E20] text-white border-[#1B5E20] hover:bg-[#2E7D32]"
                 }`}
             >
@@ -427,7 +427,7 @@ function CandidateRow({ candidate, canDelete, onDelete }) {
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-[#212121]">
+        <div className="text-sm font-semibold text-text-dark">
           {candidate.full_name}
         </div>
         <div className="flex gap-2 flex-wrap mt-0.5 items-center">
@@ -459,7 +459,7 @@ function CandidateRow({ candidate, canDelete, onDelete }) {
             </button>
             <button
               onClick={() => setConfirming(false)}
-              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-[#212121] rounded text-xs font-semibold border-none cursor-pointer transition-colors duration-150"
+              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-text-dark rounded text-xs font-semibold border-none cursor-pointer transition-colors duration-150"
             >
               No
             </button>
@@ -525,7 +525,7 @@ function RegisterElectionModal({ onClose, onSuccess }) {
           />
 
           <div>
-            <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+            <label className="block text-[13px] font-semibold text-text-dark mb-2">
               Election Type <span className="text-red-600">*</span>
             </label>
             <select
@@ -550,7 +550,7 @@ function RegisterElectionModal({ onClose, onSuccess }) {
           />
 
           <div>
-            <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+            <label className="block text-[13px] font-semibold text-text-dark mb-2">
               Initial Status <span className="text-red-600">*</span>
             </label>
             <select
@@ -593,12 +593,65 @@ function AddCandidateModal({ election, onClose }) {
   const addCandidate = useAddCandidate();
   const [error, setError] = useState("");
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const xhrRef = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     const fd = new FormData(e.currentTarget);
-    const photoFile = fd.get("photo");
+
+    let photoPath = null;
+
+    if (photoFile) {
+      setUploading(true);
+      setUploadProgress(0);
+      try {
+        const { getCandidatePhotoUploadUrl } =
+          await import("@/app/actions/elections");
+        const urlResult = await getCandidatePhotoUploadUrl({
+          fileName: photoFile.name,
+          fileType: photoFile.type,
+          fileSize: photoFile.size,
+        });
+
+        if (urlResult.error) {
+          setError(urlResult.error);
+          setUploading(false);
+          return;
+        }
+
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhrRef.current = xhr;
+          xhr.upload.addEventListener("progress", (ev) => {
+            if (ev.lengthComputable)
+              setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+          });
+          xhr.addEventListener("load", () =>
+            xhr.status < 300 ? resolve() : reject(new Error("Upload failed")),
+          );
+          xhr.addEventListener("error", () =>
+            reject(new Error("Network error")),
+          );
+          xhr.open("PUT", urlResult.uploadUrl);
+          xhr.setRequestHeader("Content-Type", photoFile.type);
+          xhr.send(photoFile);
+        });
+
+        // Store path — addCandidate generates the signed URL server-side
+        // after confirming the file exists in storage
+        photoPath = urlResult.path;
+      } catch (err) {
+        setError(err.message || "Photo upload failed.");
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
+
     try {
       await addCandidate.mutateAsync({
         electionId: election.id,
@@ -606,7 +659,7 @@ function AddCandidateModal({ election, onClose }) {
         party: fd.get("party"),
         position: fd.get("position"),
         lga: fd.get("lga") || null,
-        photoFile: photoFile?.size > 0 ? photoFile : null,
+        photoPath, // path string, not URL
       });
       onClose();
     } catch (err) {
@@ -616,11 +669,18 @@ function AddCandidateModal({ election, onClose }) {
 
   function handlePhotoChange(e) {
     const file = e.target.files?.[0];
-    if (!file) return setPhotoPreview(null);
+    if (!file) {
+      setPhotoPreview(null);
+      setPhotoFile(null);
+      return;
+    }
+    setPhotoFile(file);
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target.result);
     reader.readAsDataURL(file);
   }
+
+  const isPending = uploading || addCandidate.isPending;
 
   return (
     <Overlay onClose={onClose}>
@@ -632,11 +692,7 @@ function AddCandidateModal({ election, onClose }) {
       >
         {error && <ErrorBanner message={error} />}
 
-        <form
-          onSubmit={handleSubmit}
-          encType="multipart/form-data"
-          className="space-y-5"
-        >
+        <form onSubmit={handleSubmit} className="space-y-5">
           <FormField
             label="Full Name"
             name="full_name"
@@ -676,7 +732,8 @@ function AddCandidateModal({ election, onClose }) {
           {/* Photo upload */}
           <div>
             <label className="block text-[13px] font-semibold text-[#212121] mb-2">
-              Candidate Photo (optional)
+              Candidate Photo{" "}
+              <span className="font-normal text-[#757575]">(optional)</span>
             </label>
             <div className="flex items-center gap-4">
               {photoPreview && (
@@ -688,22 +745,54 @@ function AddCandidateModal({ election, onClose }) {
                   />
                 </div>
               )}
-              <input
-                type="file"
-                name="photo"
-                accept="image/jpeg,image/png"
-                onChange={handlePhotoChange}
-                className="text-[13px] flex-1"
-              />
+              <label
+                className={`flex-1 flex items-center gap-3 px-4 py-3 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-150
+                ${photoFile ? "border-[#4CAF50] bg-green-50" : "border-[#E0E0E0] bg-[#F9F9F9] hover:border-[#C8E6C9]"}`}
+              >
+                <span className="text-xl">{photoFile ? "📎" : "📷"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold truncate text-[#212121]">
+                    {photoFile ? photoFile.name : "Click to attach photo"}
+                  </div>
+                  <div className="text-[11px] text-[#757575] mt-0.5">
+                    {photoFile
+                      ? uploading
+                        ? `Uploading... ${uploadProgress}%`
+                        : `${(photoFile.size / 1024).toFixed(0)} KB`
+                      : "JPEG or PNG · Max 5MB"}
+                  </div>
+                </div>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+              </label>
             </div>
+            {/* Progress bar */}
+            {uploading && (
+              <div className="mt-2 h-1.5 bg-[#E0E0E0] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#4CAF50] rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 justify-end pt-2">
             <SecondaryButton label="Cancel" onClick={onClose} />
             <PrimaryButton
-              label={addCandidate.isPending ? "Adding..." : "Add Candidate"}
+              label={
+                uploading
+                  ? `Uploading ${uploadProgress}%...`
+                  : addCandidate.isPending
+                    ? "Adding..."
+                    : "Add Candidate"
+              }
               type="submit"
-              disabled={addCandidate.isPending}
+              disabled={isPending}
             />
           </div>
         </form>
@@ -744,7 +833,7 @@ function ModalCard({ title, subtitle, children, onClose, width = "max-w-lg" }) {
         </div>
         <button
           onClick={onClose}
-          className="text-xl text-text-gray hover:text-[#212121] bg-transparent border-none cursor-pointer pl-4 transition-colors duration-150"
+          className="text-xl text-text-gray hover:text-text-dark bg-transparent border-none cursor-pointer pl-4 transition-colors duration-150"
         >
           ×
         </button>
@@ -760,7 +849,7 @@ function MetaItem({ label, value }) {
       <div className="text-[11px] text-text-gray font-semibold mb-1 uppercase tracking-wide">
         {label}
       </div>
-      <div className="text-sm font-semibold text-[#212121]">{value}</div>
+      <div className="text-sm font-semibold text-text-dark">{value}</div>
     </div>
   );
 }
@@ -768,7 +857,7 @@ function MetaItem({ label, value }) {
 function FormField({ label, name, type = "text", placeholder, required }) {
   return (
     <div>
-      <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+      <label className="block text-[13px] font-semibold text-text-dark mb-2">
         {label} {required && <span className="text-red-600">*</span>}
       </label>
       <input
@@ -808,7 +897,7 @@ function SecondaryButton({ label, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="px-6 py-2.5 bg-white hover:bg-gray-50 text-[#212121] border border-[#E0E0E0] rounded-lg text-sm font-medium cursor-pointer transition-colors duration-150"
+      className="px-6 py-2.5 bg-white hover:bg-gray-50 text-text-dark border border-[#E0E0E0] rounded-lg text-sm font-medium cursor-pointer transition-colors duration-150"
     >
       {label}
     </button>
