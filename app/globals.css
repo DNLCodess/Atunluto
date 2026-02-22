@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Poppins:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -24,10 +25,10 @@
   --color-foreground: #171717;
 
   /* Font families */
-  --font-family-primary: var(--font-montserrat);
-  --font-family-secondary: var(--font-poppins);
-  --font-family-sans: var(--font-geist-sans);
-  --font-family-mono: var(--font-geist-mono);
+  --font-primary: var(--font-montserrat);
+  --font-secondary: var(--font-poppins);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 
   /* Gallery-specific animation durations */
   --animate-blob: blob 7s infinite;
@@ -932,4 +933,527 @@ img {
   .focus-ring:focus-visible {
     outline-width: 3px;
   }
+}
+/**
+ * app/results/erms.css
+ * Global styles for the Election Results Management System.
+ *
+ * Covers:
+ *  - Font imports (Montserrat + Poppins)
+ *  - CSS custom properties
+ *  - Mobile-first responsive overrides
+ *  - Print / export styles
+ *  - Accessibility (focus rings, reduced motion)
+ *  - Utility animations
+ *  - Right-click protection on images
+ */
+
+/* ─────────────────────────────────────────
+   FONTS
+───────────────────────────────────────── */
+
+/* ─────────────────────────────────────────
+   CSS CUSTOM PROPERTIES
+───────────────────────────────────────── */
+:root {
+  --erms-primary: #1b5e20;
+  --erms-secondary: #2e7d32;
+  --erms-accent: #4caf50;
+  --erms-light: #c8e6c9;
+  --erms-text: #212121;
+  --erms-gray: #757575;
+  --erms-border: #e0e0e0;
+  --erms-bg: #f5f5f5;
+  --erms-danger: #c62828;
+  --erms-sidebar-w: 240px;
+}
+
+/* ─────────────────────────────────────────
+   BASE RESETS (scoped to /results)
+───────────────────────────────────────── */
+.erms-root * {
+  box-sizing: border-box;
+}
+
+.erms-root {
+  font-family:
+    "Poppins",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: var(--erms-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─────────────────────────────────────────
+   LAYOUT — Sidebar + Content shell
+───────────────────────────────────────── */
+.erms-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.erms-sidebar {
+  width: var(--erms-sidebar-w);
+  background: var(--erms-primary);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.erms-content {
+  margin-left: var(--erms-sidebar-w);
+  flex: 1;
+  padding: 32px;
+  background: var(--erms-bg);
+  min-height: 100vh;
+}
+
+/* ─────────────────────────────────────────
+   COLLATION TABLE — horizontal scroll on mobile
+───────────────────────────────────────── */
+.erms-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.erms-table-scroll table {
+  min-width: 600px;
+}
+
+/* Sticky first column on mobile */
+@media (max-width: 768px) {
+  .erms-sticky-col {
+    position: sticky;
+    left: 0;
+    background: inherit;
+    z-index: 1;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* ─────────────────────────────────────────
+   MOBILE RESPONSIVE — 320px minimum
+───────────────────────────────────────── */
+
+/* Sidebar collapses to bottom nav on mobile */
+@media (max-width: 768px) {
+  .erms-sidebar {
+    width: 100%;
+    height: 64px;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .erms-sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-around;
+    padding: 0;
+  }
+
+  .erms-sidebar-nav a {
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    padding: 8px 4px;
+  }
+
+  .erms-sidebar-logo,
+  .erms-sidebar-role,
+  .erms-sidebar-footer {
+    display: none;
+  }
+
+  .erms-content {
+    margin-left: 0;
+    padding: 16px;
+    padding-bottom: 80px; /* room for bottom nav */
+  }
+
+  /* Stack two-column grids */
+  .erms-two-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Stack four-column stat grids into 2x2 */
+  .erms-four-col {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Full-width modals */
+  .erms-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
+
+  /* Submission form: single column on mobile */
+  .erms-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  .erms-four-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .erms-content {
+    padding: 12px;
+  }
+}
+
+/* ─────────────────────────────────────────
+   MEDIA PROTECTION — Result sheet images
+───────────────────────────────────────── */
+.erms-protected-image {
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none; /* applied when needed via JS toggle */
+}
+
+.erms-image-container {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Invisible overlay to block right-click save */
+.erms-image-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* Watermark overlay */
+.erms-watermark {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(27, 94, 32, 0.82);
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: "Poppins", sans-serif;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 2;
+  backdrop-filter: blur(3px);
+}
+
+/* ─────────────────────────────────────────
+   PRINT / EXPORT STYLES
+   Activated by window.print() on collation page
+───────────────────────────────────────── */
+@media print {
+  /* Hide everything except print target */
+  body > *:not(.erms-print-target) {
+    display: none !important;
+  }
+
+  .erms-print-target {
+    display: block !important;
+  }
+
+  .erms-sidebar,
+  .erms-no-print,
+  button,
+  .erms-tabs,
+  .erms-filters {
+    display: none !important;
+  }
+
+  .erms-content {
+    margin: 0 !important;
+    padding: 20px !important;
+    background: #fff !important;
+  }
+
+  /* Print header */
+  .erms-print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #1b5e20;
+  }
+
+  .erms-print-header h1 {
+    font-family: "Montserrat", sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: #1b5e20;
+    margin: 0 0 4px;
+  }
+
+  .erms-print-header p {
+    font-size: 12px;
+    color: #757575;
+    margin: 0;
+  }
+
+  /* Page breaks */
+  .erms-page-break {
+    page-break-before: always;
+  }
+
+  /* Table print styles */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 11px !important;
+    page-break-inside: avoid;
+  }
+
+  th,
+  td {
+    border: 1px solid #e0e0e0 !important;
+    padding: 6px 8px !important;
+  }
+
+  thead {
+    background: #1b5e20 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Grand total row */
+  .erms-grand-total-row {
+    background: #1b5e20 !important;
+    color: #fff !important;
+    font-weight: 800 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Charts — hide on print (show table only) */
+  .erms-charts-section {
+    display: none !important;
+  }
+
+  /* Footer */
+  .erms-print-footer {
+    display: block !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 10px;
+    color: #9e9e9e;
+    padding: 8px;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  @page {
+    margin: 15mm;
+    size: A4 landscape;
+  }
+}
+
+/* ─────────────────────────────────────────
+   ACCESSIBILITY
+───────────────────────────────────────── */
+
+/* Visible focus rings for keyboard nav */
+.erms-root *:focus-visible {
+  outline: 2px solid var(--erms-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip to content link */
+.erms-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  background: var(--erms-primary);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 0 0 8px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  z-index: 1000;
+  transition: top 0.2s;
+}
+
+.erms-skip-link:focus {
+  top: 0;
+}
+
+/* High contrast mode adjustments */
+@media (forced-colors: active) {
+  .erms-sidebar {
+    border-right: 2px solid ButtonText;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─────────────────────────────────────────
+   UTILITY ANIMATIONS
+───────────────────────────────────────── */
+@keyframes erms-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes erms-slide-in {
+  from {
+    transform: translateX(-8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes erms-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.erms-fade-in {
+  animation: erms-fade-in 0.3s ease forwards;
+}
+.erms-slide-in {
+  animation: erms-slide-in 0.25s ease forwards;
+}
+.erms-skeleton {
+  animation: erms-pulse 1.5s ease-in-out infinite;
+  background: #eeeeee;
+  border-radius: 8px;
+}
+
+/* ─────────────────────────────────────────
+   FORM ELEMENTS — consistent cross-browser
+───────────────────────────────────────── */
+.erms-root input[type="number"]::-webkit-inner-spin-button,
+.erms-root input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.erms-root input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.erms-root select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23757575' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px !important;
+}
+
+/* ─────────────────────────────────────────
+   SCROLLBAR STYLING (webkit)
+───────────────────────────────────────── */
+.erms-root ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.erms-root ::-webkit-scrollbar-track {
+  background: var(--erms-bg);
+}
+
+.erms-root ::-webkit-scrollbar-thumb {
+  background: var(--erms-border);
+  border-radius: 3px;
+}
+
+.erms-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--erms-gray);
+}
+
+/* ─────────────────────────────────────────
+   STATUS BADGE UTILITIES
+───────────────────────────────────────── */
+.erms-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: "Poppins", sans-serif;
+  white-space: nowrap;
+}
+
+.erms-badge--pending {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+.erms-badge--verified {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.erms-badge--disputed {
+  background: #ffebee;
+  color: #c62828;
+}
+.erms-badge--active {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.erms-badge--upcoming {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+.erms-badge--concluded {
+  background: #eeeeee;
+  color: #616161;
 }

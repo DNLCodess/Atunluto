@@ -1,59 +1,55 @@
-// components/admin/Header.jsx
+// components/shared/admin/header.jsx
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import useAuthStore from "@/lib/store";
-import { logoutAdmin } from "@/utils/auth";
+import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
-import { LogOut, User, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+const ROLE_LABELS = {
+  super_user: "Super User",
+  administrator: "Administrator",
+  registration: "Registration Staff",
+  manager: "Website Updater",
+};
+
 export default function Header({ sidebarOpen, setSidebarOpen }) {
-  const { user, profile, role } = useAuthStore();
+  const { user, profile, role, logout } = useAuth();
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
       }
     }
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     setDropdownOpen(false);
-    await logoutAdmin();
-    router.push("/login");
+    logout(undefined, {
+      onSuccess: () => router.replace("/login"),
+    });
   };
 
-  // Get role display name
-  const getRoleDisplay = () => {
-    if (!role) return "Administrator";
-
-    const roleMap = {
-      super_user: "Super User",
-      admin: "Administrator",
-      registration_staff: "Registration Staff",
-      website_updater: "Website Updater",
-    };
-
-    return roleMap[role] || "Administrator";
-  };
+  const displayName = user?.email || "Admin";
+  const roleLabel = ROLE_LABELS[role] || "Administrator";
+  const initial = displayName[0]?.toUpperCase() || "A";
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
       <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Left: Menu Button (Mobile) + Logo */}
+        {/* Left */}
         <div className="flex items-center gap-4">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Open menu"
           >
             <svg
               className="w-6 h-6"
@@ -69,67 +65,83 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
               />
             </svg>
           </button>
-
           <div className="hidden lg:block">
-            <h1 className="text-xl font-bold text-green-800">Atunluto Admin</h1>
+            <h1 className="text-xl font-bold text-green-800 font-montserrat">
+              Atunluto Admin
+            </h1>
           </div>
         </div>
 
-        {/* Right: User Menu */}
+        {/* Right */}
         <div className="flex items-center gap-4">
           <div className="hidden sm:block text-right">
-            <p className="text-sm font-semibold text-gray-900">{user?.email}</p>
-            <p className="text-xs text-gray-500">{getRoleDisplay()}</p>
+            <p className="text-sm font-semibold text-gray-900 font-poppins">
+              {displayName}
+            </p>
+            <p className="text-xs text-gray-500 font-poppins">{roleLabel}</p>
           </div>
 
-          {/* User Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
+              onClick={() => setDropdownOpen((o) => !o)}
               className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 transition"
+              aria-label="User menu"
             >
-              <div className="w-10 h-10 rounded-full bg-linear-to-br from-green-600 to-green-700 flex items-center justify-center text-white font-bold text-lg shadow-md">
-                {user?.email?.[0]?.toUpperCase() || "A"}
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md"
+                style={{
+                  background: "linear-gradient(135deg, #1B5E20, #2E7D32)",
+                }}
+              >
+                {initial}
               </div>
               <ChevronDown
-                className={`w-4 h-4 text-gray-500 transition-transform ${
-                  dropdownOpen ? "rotate-180" : ""
-                }`}
+                className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
               />
             </button>
 
-            {/* Dropdown Menu */}
             <AnimatePresence>
               {dropdownOpen && (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  initial={{ opacity: 0, scale: 0.95, y: -8 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -8 }}
                   transition={{ duration: 0.15 }}
                   className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
                 >
-                  {/* User Info */}
-                  <div className="p-4 bg-linear-to-br from-green-50 to-white border-b border-gray-200">
+                  {/* User info */}
+                  <div
+                    className="p-4 border-b border-gray-100"
+                    style={{
+                      background: "linear-gradient(135deg, #f0fdf4, #ffffff)",
+                    }}
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-linear-to-br from-green-600 to-green-700 flex items-center justify-center text-white font-bold text-xl">
-                        {user?.email?.[0]?.toUpperCase() || "A"}
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xl"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #1B5E20, #2E7D32)",
+                        }}
+                      >
+                        {initial}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">
-                          {user?.email}
+                        <p className="text-sm font-semibold text-gray-900 truncate font-poppins">
+                          {displayName}
                         </p>
-                        <p className="text-xs text-gray-600">
-                          {getRoleDisplay()}
+                        <p className="text-xs text-gray-500 font-poppins">
+                          {roleLabel}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Menu Items */}
+                  {/* Actions */}
                   <div className="py-2">
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition font-medium"
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition font-medium font-poppins"
                     >
                       <LogOut className="w-4 h-4" />
                       Sign Out

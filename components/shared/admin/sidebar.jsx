@@ -134,10 +134,7 @@ export default function Sidebar() {
             <MdSecurity className="text-2xl text-[#C8E6C9]" />
           </div>
           <div>
-            <h2
-              className="text-xl font-extrabold tracking-wide"
-              style={{ fontFamily: "Montserrat, sans-serif" }}
-            >
+            <h2 className="text-xl font-extrabold tracking-wide">
               ADMIN PORTAL
             </h2>
             <p className="text-[#C8E6C9] text-xs font-medium">Atunluto Group</p>
@@ -150,7 +147,7 @@ export default function Sidebar() {
               Logged in as
             </p>
             <p className="font-semibold text-sm mb-2 truncate">
-              {profile.full_name || profile.email || "Admin User"}
+              {profile.email || "Admin User"}
             </p>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#4CAF50] rounded-full text-xs font-bold shadow-lg">
               <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
