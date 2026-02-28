@@ -1,9 +1,6 @@
-/**
- * lib/hooks/useCollation.js
- * React Query hooks for State Admin result collation views
- */
+"use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/supabase/client";
 
 // ─────────────────────────────────────────
@@ -25,12 +22,12 @@ export function useCollatedResults(electionId) {
     },
     enabled: !!electionId,
     staleTime: 30_000,
-    refetchInterval: 60_000, // auto-refresh every 60s during active elections
+    refetchInterval: 60_000,
   });
 }
 
 // ─────────────────────────────────────────
-// GRAND TOTALS — per candidate
+// GRAND TOTALS — per candidate across all LGAs
 // ─────────────────────────────────────────
 
 export function useResultTotals(electionId) {
@@ -66,7 +63,7 @@ export function useWardBreakdown(electionId, lga) {
           `
           id, ward, polling_unit, votes_cast,
           accredited_voters, registered_voters,
-          status, submitted_at, result_image_url, result_image_path,
+          status, submitted_at, result_image_url,
           notes,
           candidate:candidate_id ( id, full_name, party ),
           submitter:submitted_by ( full_name )
@@ -86,7 +83,62 @@ export function useWardBreakdown(electionId, lga) {
 }
 
 // ─────────────────────────────────────────
-// ALL RAW RESULTS for an election (for status updates)
+// POLLING UNIT BREAKDOWN for a single ward
+// ─────────────────────────────────────────
+
+export function usePUBreakdown(electionId, lga, ward) {
+  const supabase = createClient();
+  return useQuery({
+    queryKey: ["pu-breakdown", electionId, lga, ward],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("election_results")
+        .select(
+          `
+          id, polling_unit, votes_cast,
+          accredited_voters, registered_voters,
+          status, submitted_at, result_image_url, notes, checksum,
+          candidate:candidate_id ( id, full_name, party ),
+          submitter:submitted_by ( full_name )
+        `,
+        )
+        .eq("election_id", electionId)
+        .eq("lga", lga)
+        .eq("ward", ward)
+        .is("deleted_at", null)
+        .order("polling_unit");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!(electionId && lga && ward),
+    staleTime: 30_000,
+  });
+}
+
+// ─────────────────────────────────────────
+// LGA SUMMARY STATS — for State Admin dashboard
+// ─────────────────────────────────────────
+
+export function useLGASummary(electionId) {
+  const supabase = createClient();
+  return useQuery({
+    queryKey: ["lga-summary", electionId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("v_lga_summary")
+        .select("*")
+        .eq("election_id", electionId)
+        .order("lga");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!electionId,
+    staleTime: 30_000,
+  });
+}
+
+// ─────────────────────────────────────────
+// ALL RAW RESULTS for an election (status management)
 // ─────────────────────────────────────────
 
 export function useAllResults(electionId, filters = {}) {
@@ -100,10 +152,10 @@ export function useAllResults(electionId, filters = {}) {
           `
           id, lga, ward, polling_unit, votes_cast,
           accredited_voters, registered_voters,
-          status, submitted_at, result_image_url, result_image_path,
+          status, submitted_at, result_image_url,
           checksum, notes, deleted_at,
           candidate:candidate_id ( id, full_name, party ),
-          submitter:submitted_by ( full_name, lga ),
+          submitter:submitted_by ( full_name, lga, ward, polling_unit ),
           verifier:verified_by ( full_name )
         `,
         )
@@ -113,6 +165,7 @@ export function useAllResults(electionId, filters = {}) {
 
       if (filters.status) query = query.eq("status", filters.status);
       if (filters.lga) query = query.eq("lga", filters.lga);
+      if (filters.ward) query = query.eq("ward", filters.ward);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -127,8 +180,6 @@ export function useAllResults(electionId, filters = {}) {
 // UPDATE RESULT STATUS (verify / dispute)
 // ─────────────────────────────────────────
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-
 export function useUpdateResultStatus() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -136,10 +187,7 @@ export function useUpdateResultStatus() {
       const supabase = createClient();
       const { error } = await supabase
         .from("election_results")
-        .update({
-          status,
-          verified_by: status === "verified" ? undefined : null,
-        })
+        .update({ status })
         .eq("id", resultId);
       if (error) throw error;
       return { resultId, status };
@@ -153,6 +201,12 @@ export function useUpdateResultStatus() {
       });
       queryClient.invalidateQueries({
         queryKey: ["result-totals", vars.electionId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["ward-breakdown", vars.electionId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["lga-summary", vars.electionId],
       });
     },
   });

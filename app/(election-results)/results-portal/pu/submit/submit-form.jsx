@@ -1,0 +1,705 @@
+"use client";
+
+/**
+ * app/results-portal/pu/submit/PUSubmitForm.jsx
+ * Client form — same UX as LGA submit but location is locked to PU.
+ */
+
+import { useState, useRef } from "react";
+import Link from "next/link";
+import {
+  useActiveElections,
+  useElectionCandidates,
+  useSubmitResult,
+} from "@/hooks/use-election-results";
+
+const STEPS = ["Election", "Votes", "Evidence", "Review"];
+
+const PARTY_COLORS = {
+  APC: { text: "text-blue-800", bg: "bg-blue-50" },
+  PDP: { text: "text-red-800", bg: "bg-red-50" },
+  LP: { text: "text-yellow-800", bg: "bg-yellow-50" },
+  ADC: { text: "text-purple-800", bg: "bg-purple-50" },
+  NNPP: { text: "text-green-800", bg: "bg-green-50" },
+  SDP: { text: "text-orange-800", bg: "bg-orange-50" },
+};
+
+export default function PUSubmitForm({ lga, ward, pollingUnit, adminId }) {
+  const [step, setStep] = useState(0);
+  const [success, setSuccess] = useState(null);
+  const [error, setError] = useState("");
+  const [electionId, setElectionId] = useState("");
+  const [candidateVotes, setCandidateVotes] = useState({});
+  const [accredited, setAccredited] = useState("");
+  const [registered, setRegistered] = useState("");
+  const [notes, setNotes] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadState, setUploadState] = useState("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [imagePath, setImagePath] = useState(null);
+  const xhrRef = useRef(null);
+
+  const { data: elections = [], isLoading: loadingElections } =
+    useActiveElections();
+  const { data: candidates = [], isLoading: loadingCandidates } =
+    useElectionCandidates(electionId);
+  const submitResult = useSubmitResult();
+
+  const selectedElection = elections.find((e) => e.id === electionId);
+  const totalVotes = Object.values(candidateVotes).reduce(
+    (s, v) => s + (Number(v) || 0),
+    0,
+  );
+  const overVote = Number(accredited) > 0 && totalVotes > Number(accredited);
+
+  const step0Valid = !!electionId;
+  const step1Valid =
+    candidates.length > 0 &&
+    candidates.every(
+      (c) => candidateVotes[c.id] !== undefined && candidateVotes[c.id] >= 0,
+    ) &&
+    accredited !== "" &&
+    registered !== "" &&
+    !overVote;
+  const stepValid = [step0Valid, step1Valid, true, true];
+
+  function handleVoteChange(candidateId, value) {
+    setCandidateVotes((prev) => ({
+      ...prev,
+      [candidateId]: value === "" ? "" : Math.max(0, parseInt(value) || 0),
+    }));
+  }
+
+  async function handleImageChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(null);
+      setImagePath(null);
+      setUploadState("idle");
+      return;
+    }
+    setImageFile(file);
+    setUploadState("idle");
+    setUploadProgress(0);
+    setImagePath(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev.target.result);
+    reader.readAsDataURL(file);
+    uploadImageFile(file);
+  }
+
+  async function uploadImageFile(file) {
+    setUploadState("uploading");
+    setUploadProgress(0);
+    try {
+      const { getResultImageUploadUrl } =
+        await import("@/app/actions/result-submission");
+      const urlResult = await getResultImageUploadUrl({
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+      if (urlResult.error) {
+        setUploadState("error");
+        setError(urlResult.error);
+        return;
+      }
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhrRef.current = xhr;
+        xhr.upload.addEventListener("progress", (ev) => {
+          if (ev.lengthComputable)
+            setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
+        });
+        xhr.addEventListener("load", () =>
+          xhr.status < 300 ? resolve() : reject(new Error("Upload failed")),
+        );
+        xhr.addEventListener("error", () => reject(new Error("Network error")));
+        xhr.open("PUT", urlResult.uploadUrl);
+        xhr.setRequestHeader("Content-Type", file.type);
+        xhr.send(file);
+      });
+      setImagePath(urlResult.path);
+      setUploadState("done");
+      setUploadProgress(100);
+    } catch (err) {
+      setUploadState("error");
+      setError(err.message || "Image upload failed.");
+    }
+  }
+
+  async function handleSubmit() {
+    setError("");
+    if (imageFile && uploadState !== "done")
+      return setError("Please wait for image upload to complete.");
+    try {
+      const result = await submitResult.mutateAsync({
+        electionId,
+        ward,
+        pollingUnit,
+        candidateVotes: candidates.map((c) => ({
+          candidateId: c.id,
+          votes: Number(candidateVotes[c.id] || 0),
+        })),
+        accreditedVoters: Number(accredited),
+        registeredVoters: Number(registered),
+        notes,
+        imagePath,
+      });
+      setSuccess(result);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function reset() {
+    setStep(0);
+    setSuccess(null);
+    setError("");
+    setElectionId("");
+    setCandidateVotes({});
+    setAccredited("");
+    setRegistered("");
+    setNotes("");
+    setImageFile(null);
+    setImagePreview(null);
+    setUploadState("idle");
+    setUploadProgress(0);
+    setImagePath(null);
+  }
+
+  if (success) return <SuccessScreen result={success} onAnother={reset} />;
+
+  return (
+    <div className="p-8 font-[Poppins,sans-serif] text-[#212121]">
+      {/* Header */}
+      <div className="mb-7">
+        <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
+          Submit Results
+        </h1>
+        <p className="text-sm text-[#757575]">
+          Enter results for your assigned polling unit
+        </p>
+      </div>
+
+      {/* Location info banner */}
+      <div className="bg-[#E8F5E9] border border-[#C8E6C9] rounded-xl px-5 py-4 mb-6">
+        <div className="text-[11px] font-bold text-[#757575] tracking-widest uppercase mb-2">
+          Your Assigned Location
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            ["LGA", lga],
+            ["Ward", ward],
+            ["Polling Unit", pollingUnit],
+          ].map(([label, val]) => (
+            <div key={label}>
+              <div className="text-[10px] text-[#757575] font-semibold uppercase tracking-wide">
+                {label}
+              </div>
+              <div className="text-sm font-bold text-[#1B5E20]">{val}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 text-[11px] text-[#757575]">
+          🔒 Location is pre-filled and cannot be changed
+        </div>
+      </div>
+
+      {/* Stepper */}
+      <StepIndicator steps={STEPS} current={step} />
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mt-5 text-[13px] text-red-800 flex items-center gap-2">
+          <span>⚠️</span> {error}
+        </div>
+      )}
+
+      {/* Form card */}
+      <div className="bg-white rounded-2xl border border-[#E0E0E0] p-8 mt-6">
+        {/* Step 0 — Election */}
+        {step === 0 && (
+          <div>
+            <StepTitle
+              title="Select Election"
+              subtitle="Choose which active election you are submitting results for."
+            />
+            <div className="mb-5">
+              <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+                Election <span className="text-red-600">*</span>
+              </label>
+              {loadingElections ? (
+                <Skeleton />
+              ) : elections.length === 0 ? (
+                <div className="px-4 py-3.5 bg-yellow-50 border border-yellow-200 rounded-xl text-[13px] text-yellow-900">
+                  ⚠️ No active elections at the moment. Contact your LGA Admin.
+                </div>
+              ) : (
+                <select
+                  value={electionId}
+                  onChange={(e) => {
+                    setElectionId(e.target.value);
+                    setCandidateVotes({});
+                  }}
+                  className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm bg-white outline-none focus:border-[#1B5E20] cursor-pointer transition-colors duration-150"
+                >
+                  <option value="">Select election...</option>
+                  {elections.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Step 1 — Votes */}
+        {step === 1 && (
+          <div>
+            <StepTitle
+              title="Enter Vote Counts"
+              subtitle="Record the exact votes from the official INEC result sheet."
+            />
+            {loadingCandidates ? (
+              <div className="space-y-3 mb-6">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} />
+                ))}
+              </div>
+            ) : candidates.length === 0 ? (
+              <div className="px-4 py-5 bg-yellow-50 rounded-xl text-[13px] text-yellow-900 mb-6">
+                ⚠️ No candidates found. Contact the State Admin.
+              </div>
+            ) : (
+              <div className="mb-6">
+                {candidates.map((c) => (
+                  <div
+                    key={c.id}
+                    className={`flex items-center gap-4 px-4 py-4 border-[1.5px] rounded-xl mb-2.5 transition-colors duration-150 ${Number(candidateVotes[c.id]) > 0 ? "border-[#C8E6C9] bg-green-50" : "border-[#E0E0E0] bg-white"}`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-green-50 border border-[#C8E6C9] flex items-center justify-center font-bold text-[#1B5E20] text-sm shrink-0 overflow-hidden">
+                      {c.photo_url ? (
+                        <img
+                          src={c.photo_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        c.full_name.charAt(0)
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold">{c.full_name}</div>
+                      <PartyBadge party={c.party} />
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="text-xs text-[#757575] font-semibold">
+                        Votes
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={candidateVotes[c.id] ?? ""}
+                        onChange={(e) => handleVoteChange(c.id, e.target.value)}
+                        placeholder="0"
+                        className="w-[80px] px-2.5 py-2 border-[1.5px] border-[#E0E0E0] rounded-lg text-lg font-bold text-center font-[Montserrat,sans-serif] text-[#1B5E20] outline-none focus:border-[#1B5E20] transition-colors duration-150"
+                      />
+                    </div>
+                  </div>
+                ))}
+                <div
+                  className={`flex justify-between items-center px-4 py-3 rounded-xl border mt-2 ${overVote ? "bg-red-50 border-red-200" : "bg-green-50 border-[#C8E6C9]"}`}
+                >
+                  <span
+                    className={`text-[13px] font-semibold ${overVote ? "text-red-800" : "text-[#1B5E20]"}`}
+                  >
+                    Total Votes Cast
+                  </span>
+                  <span
+                    className={`font-[Montserrat,sans-serif] text-xl font-extrabold ${overVote ? "text-red-800" : "text-[#1B5E20]"}`}
+                  >
+                    {totalVotes.toLocaleString()}
+                  </span>
+                </div>
+                {overVote && (
+                  <p className="text-xs text-red-700 font-semibold mt-1.5">
+                    ⚠️ Exceeds accredited voters ({accredited}). Please recheck.
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4 pt-5 border-t border-[#E0E0E0]">
+              {[
+                [
+                  "Accredited Voters",
+                  accredited,
+                  setAccredited,
+                  "From result sheet header",
+                ],
+                [
+                  "Registered Voters",
+                  registered,
+                  setRegistered,
+                  "Total in this unit",
+                ],
+              ].map(([label, val, setter, hint]) => (
+                <div key={label}>
+                  <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+                    {label} <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={val}
+                    onChange={(e) => setter(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-lg font-bold text-center font-[Montserrat,sans-serif] text-[#1B5E20] outline-none focus:border-[#1B5E20] transition-colors duration-150"
+                  />
+                  <p className="text-[11px] text-[#757575] mt-1">{hint}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 2 — Evidence */}
+        {step === 2 && (
+          <div>
+            <StepTitle
+              title="Upload Evidence"
+              subtitle="Attach the official INEC result sheet image."
+            />
+            <div className="mb-6">
+              <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+                Result Sheet Image{" "}
+                <span className="font-normal text-[#757575]">
+                  (Recommended)
+                </span>
+              </label>
+              {imagePreview ? (
+                <div>
+                  <div className="relative">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="w-full max-h-64 object-contain rounded-xl border border-[#C8E6C9]"
+                    />
+                    <button
+                      onClick={() =>
+                        handleImageChange({ target: { files: [] } })
+                      }
+                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white border-none rounded-full px-2.5 py-1 text-xs cursor-pointer"
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                  <div
+                    className={`mt-2 rounded-xl border px-3.5 py-2.5 text-[12px] flex items-center gap-2.5 ${uploadState === "done" ? "bg-green-50 border-[#C8E6C9] text-[#2E7D32]" : uploadState === "error" ? "bg-red-50 border-red-200 text-red-700" : "bg-[#F5F5F5] border-[#E0E0E0] text-[#757575]"}`}
+                  >
+                    <span>
+                      {uploadState === "done"
+                        ? "✅"
+                        : uploadState === "error"
+                          ? "❌"
+                          : uploadState === "uploading"
+                            ? "⏳"
+                            : "📎"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate">
+                        {imageFile?.name}
+                      </div>
+                      <div className="text-[11px] mt-0.5">
+                        {uploadState === "uploading" &&
+                          `Uploading... ${uploadProgress}%`}
+                        {uploadState === "done" && "Upload complete"}
+                        {uploadState === "error" && "Upload failed"}
+                      </div>
+                    </div>
+                  </div>
+                  {uploadState === "uploading" && (
+                    <div className="mt-1.5 h-1.5 bg-[#E0E0E0] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#4CAF50] rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center px-6 py-10 border-2 border-dashed border-[#E0E0E0] rounded-xl cursor-pointer bg-[#F5F5F5] hover:border-[#4CAF50] hover:bg-green-50 transition-all duration-150">
+                  <span className="text-4xl mb-2.5">📷</span>
+                  <span className="text-sm font-semibold text-[#1B5E20] mb-1">
+                    Click to upload result sheet
+                  </span>
+                  <span className="text-xs text-[#757575]">
+                    JPEG or PNG · Max 10MB
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+            <div>
+              <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+                Notes{" "}
+                <span className="font-normal text-[#757575]">
+                  (Optional, max 2,000 chars)
+                </span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                maxLength={2000}
+                rows={4}
+                placeholder="Any relevant observations or context..."
+                className="w-full px-3.5 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm outline-none resize-y leading-relaxed focus:border-[#1B5E20] transition-colors duration-150"
+              />
+              <p className="text-[11px] text-[#757575] text-right mt-1">
+                {notes.length} / 2,000
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3 — Review */}
+        {step === 3 && (
+          <div>
+            <StepTitle
+              title="Review Submission"
+              subtitle="Verify all details carefully. You cannot edit after submission."
+            />
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 mb-5 text-[13px] text-yellow-900">
+              ⚠️ Once submitted, results{" "}
+              <strong>cannot be edited or deleted</strong> by you.
+            </div>
+            <ReviewSection title="Location">
+              <ReviewRow
+                label="Election"
+                value={selectedElection?.title || "—"}
+              />
+              <ReviewRow label="LGA" value={lga} />
+              <ReviewRow label="Ward" value={ward} />
+              <ReviewRow label="Polling Unit" value={pollingUnit} />
+            </ReviewSection>
+            <ReviewSection title="Votes">
+              {candidates.map((c) => (
+                <ReviewRow
+                  key={c.id}
+                  label={
+                    <span className="flex items-center gap-1.5">
+                      {c.full_name} <PartyBadge party={c.party} />
+                    </span>
+                  }
+                  value={
+                    <span className="font-[Montserrat,sans-serif] text-base font-extrabold text-[#1B5E20]">
+                      {(Number(candidateVotes[c.id]) || 0).toLocaleString()}
+                    </span>
+                  }
+                />
+              ))}
+              <div className="mt-2 pt-2 border-t border-dashed border-[#E0E0E0]">
+                <ReviewRow
+                  label="Total Votes"
+                  value={totalVotes.toLocaleString()}
+                />
+                <ReviewRow
+                  label="Accredited Voters"
+                  value={Number(accredited).toLocaleString()}
+                />
+                <ReviewRow
+                  label="Registered Voters"
+                  value={Number(registered).toLocaleString()}
+                />
+              </div>
+            </ReviewSection>
+            <ReviewSection title="Evidence">
+              <ReviewRow
+                label="Image"
+                value={
+                  imageFile ? (
+                    <span className="text-[#2E7D32] font-semibold">
+                      ✅ {imageFile.name}
+                    </span>
+                  ) : (
+                    <span className="text-[#757575] italic">No image</span>
+                  )
+                }
+              />
+              <ReviewRow
+                label="Notes"
+                value={
+                  notes ? (
+                    notes.substring(0, 80) + (notes.length > 80 ? "..." : "")
+                  ) : (
+                    <span className="text-[#757575] italic">None</span>
+                  )
+                }
+              />
+            </ReviewSection>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <div className="flex justify-between mt-8 pt-6 border-t border-[#E0E0E0]">
+          <button
+            onClick={() => setStep((s) => s - 1)}
+            disabled={step === 0}
+            className={`px-6 py-3 rounded-xl text-sm font-medium border transition-all duration-150 ${step === 0 ? "bg-[#EEEEEE] text-[#BDBDBD] border-[#EEEEEE] cursor-not-allowed" : "bg-white text-[#212121] border-[#E0E0E0] hover:border-[#9E9E9E] cursor-pointer"}`}
+          >
+            ← Back
+          </button>
+
+          {step < 3 ? (
+            <button
+              onClick={() => setStep((s) => s + 1)}
+              disabled={!stepValid[step]}
+              className={`px-7 py-3 rounded-xl text-sm font-semibold text-white border-none transition-all duration-150 ${stepValid[step] ? "bg-[#1B5E20] hover:bg-[#2E7D32] cursor-pointer shadow-lg shadow-[#1B5E20]/20" : "bg-[#A5D6A7] cursor-not-allowed"}`}
+            >
+              Next →
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={submitResult.isPending}
+              className={`px-8 py-3 rounded-xl text-sm font-bold text-white border-none flex items-center gap-2 transition-all duration-150 ${submitResult.isPending ? "bg-[#A5D6A7] cursor-not-allowed" : "bg-[#1B5E20] hover:bg-[#2E7D32] cursor-pointer"}`}
+            >
+              {submitResult.isPending ? (
+                <>
+                  <Spinner /> Submitting...
+                </>
+              ) : (
+                "✅ Submit Results"
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SuccessScreen({ result, onAnother }) {
+  return (
+    <div className="p-8 font-[Poppins,sans-serif]">
+      <div className="max-w-[520px] mx-auto text-center mt-16">
+        <div className="text-6xl mb-5">✅</div>
+        <h2 className="font-[Montserrat,sans-serif] text-2xl font-extrabold text-[#1B5E20] mb-3">
+          Results Submitted
+        </h2>
+        <p className="text-sm text-[#757575] leading-relaxed mb-8">
+          Results for{" "}
+          <strong className="text-[#212121]">{result.pollingUnit}</strong> have
+          been recorded. The State Admin will verify your submission.
+        </p>
+        <div className="flex gap-3 justify-center">
+          <Link
+            href="/results-portal/pu/results"
+            className="px-6 py-3 bg-[#F5F5F5] text-[#212121] border border-[#E0E0E0] rounded-xl text-sm font-medium no-underline hover:border-[#9E9E9E] transition-colors duration-150"
+          >
+            View My Submissions
+          </Link>
+          <button
+            onClick={onAnother}
+            className="px-6 py-3 bg-[#1B5E20] hover:bg-[#2E7D32] text-white border-none rounded-xl text-sm font-semibold cursor-pointer transition-colors duration-150"
+          >
+            Submit Another
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared primitives ───────────────────
+function StepIndicator({ steps, current }) {
+  return (
+    <div className="flex mb-2">
+      {steps.map((label, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <div key={label} className="flex items-center flex-1">
+            <div className="flex flex-col items-center flex-1">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold transition-all duration-300 ${done ? "bg-[#4CAF50] text-white" : active ? "bg-[#1B5E20] text-white" : "bg-[#E0E0E0] text-[#757575]"}`}
+              >
+                {done ? "✓" : i + 1}
+              </div>
+              <div
+                className={`text-[11px] mt-1 whitespace-nowrap ${active ? "font-bold text-[#1B5E20]" : "text-[#757575]"}`}
+              >
+                {label}
+              </div>
+            </div>
+            {i < steps.length - 1 && (
+              <div
+                className={`h-0.5 flex-1 mb-[18px] transition-colors duration-300 ${i < current ? "bg-[#4CAF50]" : "bg-[#E0E0E0]"}`}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function StepTitle({ title, subtitle }) {
+  return (
+    <div className="mb-6">
+      <h2 className="font-[Montserrat,sans-serif] text-lg font-extrabold text-[#1B5E20] mb-1">
+        {title}
+      </h2>
+      <p className="text-[13px] text-[#757575]">{subtitle}</p>
+    </div>
+  );
+}
+function ReviewSection({ title, children }) {
+  return (
+    <div className="mb-4">
+      <div className="text-[11px] font-bold text-[#757575] tracking-widest uppercase mb-2">
+        {title}
+      </div>
+      <div className="bg-[#F5F5F5] rounded-xl px-4 py-3">{children}</div>
+    </div>
+  );
+}
+function ReviewRow({ label, value }) {
+  return (
+    <div className="flex justify-between items-center py-1.5 border-b border-[#E0E0E0] last:border-b-0 text-[13px]">
+      <span className="text-[#757575] font-medium">{label}</span>
+      <span className="text-[#212121] font-semibold text-right max-w-[60%]">
+        {value}
+      </span>
+    </div>
+  );
+}
+function PartyBadge({ party }) {
+  const cfg = PARTY_COLORS[party?.toUpperCase()] || {
+    text: "text-gray-700",
+    bg: "bg-gray-100",
+  };
+  return (
+    <span
+      className={`${cfg.bg} ${cfg.text} px-1.5 py-0.5 rounded text-[11px] font-bold`}
+    >
+      {party}
+    </span>
+  );
+}
+function Skeleton() {
+  return <div className="h-11 bg-[#EEEEEE] rounded-xl animate-pulse" />;
+}
+function Spinner() {
+  return (
+    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+  );
+}

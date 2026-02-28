@@ -1,20 +1,23 @@
 "use client";
 
 /**
- * app/results-portal/admin/admins/page.jsx
- * State Admin — Account Management with tabs for LGA Admins and PU Agents.
+ * components/erms/PollingUnitAdminsManager.jsx
+ * Reusable component for managing Polling Unit Admins.
+ * Used by both State Admin (/admin/admins tab) and LGA Admin (/lga/agents).
+ *
+ * Props:
+ *   viewerRole  — "state_admin" | "lga_admin"
+ *   viewerLGA   — locked LGA string for lga_admin, null for state_admin
+ *   wardsData   — optional { [lgaName]: wardsList[] } map
  */
 
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { usePUAdmins, useTogglePUAdminStatus } from "@/hooks/use-pu-admins";
 import {
-  useLGAAdmins,
-  useToggleLGAAdminStatus,
-} from "@/hooks/use-election-admins";
-import {
-  createLGAAdmin,
-  regenerateLGAAdminPassword,
-} from "@/app/actions/election-auth";
-import PollingUnitAdminsManager from "@/components/shared/rp/pu/manager";
+  createPUAdmin,
+  regeneratePUAdminPassword,
+} from "@/app/actions/pu-auth";
+import { fetchLGAWards } from "@/app/actions/results-fetch";
 
 const VALID_LGAS = [
   "Ibadan North",
@@ -28,91 +31,65 @@ const VALID_LGAS = [
   "Ido",
 ];
 
-export default function AdminsPage() {
-  const [activeTab, setActiveTab] = useState("lga");
-
-  return (
-    <div className="p-8 font-[Poppins,sans-serif] text-[#212121]">
-      {/* Page header */}
-      <div className="mb-8">
-        <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
-          Account Management
-        </h1>
-        <p className="text-[#757575] text-sm">
-          Manage LGA Admins and Polling Unit Agents across Oyo South Senatorial
-          District
-        </p>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-[#F5F5F5] p-1 rounded-xl mb-8 w-fit">
-        {[
-          { id: "lga", label: "👥 LGA Admins", desc: "9 LGA administrators" },
-          { id: "pu", label: "📍 PU Agents", desc: "Polling unit agents" },
-        ].map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`px-5 py-2.5 rounded-lg text-sm font-semibold border-none cursor-pointer transition-all duration-200 ${
-              activeTab === id
-                ? "bg-[#1B5E20] text-white shadow-md"
-                : "bg-transparent text-[#757575] hover:text-[#212121]"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {activeTab === "lga" ? (
-        <LGAAdminsPanel />
-      ) : (
-        <PollingUnitAdminsManager viewerRole="state_admin" viewerLGA={null} />
-      )}
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────
-// LGA ADMINS PANEL (extracted from original page)
+// MAIN COMPONENT
 // ─────────────────────────────────────────
 
-function LGAAdminsPanel() {
-  const { data: admins = [], isLoading, isError } = useLGAAdmins();
-  const toggleStatus = useToggleLGAAdminStatus();
+export default function PollingUnitAdminsManager({ viewerRole, viewerLGA }) {
+  const lgaFilter = viewerRole === "lga_admin" ? viewerLGA : undefined;
+  const { data: admins = [], isLoading, isError } = usePUAdmins(lgaFilter);
+  const toggleStatus = useTogglePUAdminStatus(lgaFilter);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(null);
   const [showRegenConfirm, setShowRegenConfirm] = useState(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [lgaFilter, setLgaFilter] = useState("");
+  const [lgaFilter2, setLgaFilter2] = useState(viewerLGA || "");
+  const [wardFilter, setWardFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
   const filtered = admins.filter((a) => {
-    const matchesSearch =
+    const matchSearch =
       !searchQuery ||
       a.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesLga = !lgaFilter || a.lga === lgaFilter;
-    const matchesStatus = !statusFilter || String(a.is_active) === statusFilter;
-    return matchesSearch && matchesLga && matchesStatus;
+      a.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (a.polling_unit || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchLGA =
+      viewerRole === "lga_admin" || !lgaFilter2 || a.lga === lgaFilter2;
+    const matchWard = !wardFilter || a.ward === wardFilter;
+    const matchStatus = !statusFilter || String(a.is_active) === statusFilter;
+    return matchSearch && matchLGA && matchWard && matchStatus;
   });
 
   const totalActive = admins.filter((a) => a.is_active).length;
   const totalPending = admins.filter((a) => a.must_change_password).length;
-  const totalInactive = admins.filter((a) => !a.is_active).length;
+  const uniqueLGAs = [...new Set(admins.map((a) => a.lga))].length;
+  const uniqueWards = [
+    ...new Set(admins.filter((a) => a.is_active).map((a) => a.ward)),
+  ];
+
+  // Unique wards across filtered LGA for ward filter dropdown
+  const wardOptions = [
+    ...new Set(
+      admins
+        .filter(
+          (a) =>
+            viewerRole === "lga_admin" || !lgaFilter2 || a.lga === lgaFilter2,
+        )
+        .map((a) => a.ward)
+        .filter(Boolean),
+    ),
+  ].sort();
 
   async function handleRegen() {
     if (!showRegenConfirm) return;
     setRegenLoading(true);
-    const result = await regenerateLGAAdminPassword(showRegenConfirm.id);
+    const result = await regeneratePUAdminPassword(showRegenConfirm.id);
     setRegenLoading(false);
     setShowRegenConfirm(null);
     if (result?.error) return alert(result.error);
     setShowPasswordModal({
-      adminId: showRegenConfirm.id,
       adminName: showRegenConfirm.full_name,
       password: result.plainPassword,
       isRegen: true,
@@ -122,7 +99,6 @@ function LGAAdminsPanel() {
   function handleCreateSuccess(data) {
     setShowCreateModal(false);
     setShowPasswordModal({
-      adminId: data.admin.id,
       adminName: data.admin.full_name,
       password: data.plainPassword,
       isRegen: false,
@@ -130,30 +106,32 @@ function LGAAdminsPanel() {
   }
 
   return (
-    <div>
-      {/* Sub-header */}
-      <div className="flex justify-between items-start mb-6">
+    <div className="font-[Poppins,sans-serif] text-[#212121]">
+      {/* Header */}
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h2 className="font-[Montserrat,sans-serif] text-xl font-extrabold text-[#1B5E20] mb-1">
-            LGA Admin Accounts
-          </h2>
+          <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
+            Polling Unit Agents
+          </h1>
           <p className="text-[#757575] text-sm">
-            Manage field administrators for the 9 Local Government Areas
+            {viewerRole === "lga_admin"
+              ? `Manage agents submitting results for ${viewerLGA}`
+              : "Manage polling unit agents across all 9 LGAs"}
           </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white border-none rounded-xl px-6 py-3 text-sm font-semibold cursor-pointer flex items-center gap-2 transition-colors duration-150"
         >
-          <span className="text-lg leading-none">+</span> Add LGA Admin
+          <span className="text-lg leading-none">+</span> Add PU Agent
         </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 mb-7">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
         {[
           {
-            label: "Total Admins",
+            label: "Total Agents",
             value: admins.length,
             color: "text-[#1B5E20]",
           },
@@ -163,19 +141,11 @@ function LGAAdminsPanel() {
             value: totalPending,
             color: "text-orange-700",
           },
-          { label: "Inactive", value: totalInactive, color: "text-[#757575]" },
           {
-            label: "LGAs Covered",
-            value: new Set(admins.filter((a) => a.is_active).map((a) => a.lga))
-              .size,
-            color: "text-[#2E7D32]",
-          },
-          {
-            label: "LGAs Missing",
-            value:
-              VALID_LGAS.length -
-              new Set(admins.filter((a) => a.is_active).map((a) => a.lga)).size,
-            color: "text-red-800",
+            label:
+              viewerRole === "lga_admin" ? "Wards Covered" : "LGAs Covered",
+            value: viewerRole === "lga_admin" ? uniqueWards.length : uniqueLGAs,
+            color: "text-[#1B5E20]",
           },
         ].map(({ label, value, color }) => (
           <div
@@ -197,23 +167,42 @@ function LGAAdminsPanel() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-[#E0E0E0] px-5 py-4 mb-5 flex gap-3 flex-wrap items-center">
         <input
-          placeholder="Search by name or email..."
+          placeholder="Search name, email, polling unit..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1 min-w-[200px] px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] outline-none focus:border-[#1B5E20] transition-colors duration-150"
         />
-        <select
-          value={lgaFilter}
-          onChange={(e) => setLgaFilter(e.target.value)}
-          className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer focus:border-[#1B5E20] transition-colors duration-150"
-        >
-          <option value="">All LGAs</option>
-          {VALID_LGAS.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+        {viewerRole === "state_admin" && (
+          <select
+            value={lgaFilter2}
+            onChange={(e) => {
+              setLgaFilter2(e.target.value);
+              setWardFilter("");
+            }}
+            className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer focus:border-[#1B5E20] transition-colors duration-150"
+          >
+            <option value="">All LGAs</option>
+            {VALID_LGAS.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        )}
+        {wardOptions.length > 0 && (
+          <select
+            value={wardFilter}
+            onChange={(e) => setWardFilter(e.target.value)}
+            className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer focus:border-[#1B5E20] transition-colors duration-150"
+          >
+            <option value="">All Wards</option>
+            {wardOptions.map((w) => (
+              <option key={w} value={w}>
+                {w}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -223,11 +212,15 @@ function LGAAdminsPanel() {
           <option value="true">Active</option>
           <option value="false">Inactive</option>
         </select>
-        {(searchQuery || lgaFilter || statusFilter) && (
+        {(searchQuery ||
+          (lgaFilter2 && viewerRole === "state_admin") ||
+          wardFilter ||
+          statusFilter) && (
           <button
             onClick={() => {
               setSearchQuery("");
-              setLgaFilter("");
+              setLgaFilter2(viewerLGA || "");
+              setWardFilter("");
               setStatusFilter("");
             }}
             className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] cursor-pointer bg-[#F5F5F5] text-[#757575]"
@@ -235,85 +228,69 @@ function LGAAdminsPanel() {
             Clear
           </button>
         )}
-        <div className="text-[13px] text-[#757575] ml-auto">
-          {filtered.length} of {admins.length} admins
+        <div className="text-[13px] text-[#757575] ml-auto whitespace-nowrap">
+          {filtered.length} of {admins.length} agents
         </div>
       </div>
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-[#E0E0E0] overflow-hidden">
         {isLoading ? (
-          <div className="p-6 space-y-2">
-            {[...Array(5)].map((_, i) => (
-              <div
-                key={i}
-                className="h-[60px] bg-[#F5F5F5] rounded-lg animate-pulse"
-              />
-            ))}
-          </div>
+          <SkeletonRows />
         ) : isError ? (
-          <div className="p-10 text-center text-red-700">
-            Failed to load admin accounts. Please refresh.
+          <div className="p-10 text-center text-red-700 text-sm">
+            Failed to load agents. Please refresh.
           </div>
         ) : filtered.length === 0 ? (
-          <div className="px-6 py-[60px] text-center">
-            <div className="text-[40px] mb-4">👥</div>
-            <div className="text-base font-semibold text-[#212121] mb-2">
-              {searchQuery || lgaFilter || statusFilter
-                ? "No admins match your filters"
-                : "No LGA Admins yet"}
-            </div>
-            <div className="text-[13px] text-[#757575]">
-              {searchQuery || lgaFilter || statusFilter
-                ? "Try adjusting your criteria."
-                : 'Click "Add LGA Admin" to create the first administrator.'}
-            </div>
-          </div>
+          <EmptyState
+            hasFilters={!!(searchQuery || wardFilter || statusFilter)}
+          />
         ) : (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-[#F5F5F5] border-b-2 border-[#E0E0E0]">
-                {[
-                  "Admin",
-                  "LGA",
-                  "Status",
-                  "Last Login",
-                  "Created",
-                  "Actions",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-[11px] font-bold text-[#757575] tracking-[0.8px] uppercase"
-                  >
-                    {h}
-                  </th>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[700px]">
+              <thead>
+                <tr className="bg-[#F5F5F5] border-b-2 border-[#E0E0E0]">
+                  {["Agent", "Location", "Status", "Last Login", "Actions"].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-3 text-left text-[11px] font-bold text-[#757575] tracking-[0.8px] uppercase"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((admin, i) => (
+                  <PUAdminRow
+                    key={admin.id}
+                    admin={admin}
+                    isEven={i % 2 === 0}
+                    showLGA={viewerRole === "state_admin"}
+                    onToggle={(activate) =>
+                      toggleStatus.mutate({ adminId: admin.id, activate })
+                    }
+                    onRegen={() =>
+                      setShowRegenConfirm({
+                        id: admin.id,
+                        full_name: admin.full_name,
+                      })
+                    }
+                  />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((admin, i) => (
-                <LGAAdminRow
-                  key={admin.id}
-                  admin={admin}
-                  isEven={i % 2 === 0}
-                  onToggle={(activate) =>
-                    toggleStatus.mutate({ adminId: admin.id, activate })
-                  }
-                  onRegen={() =>
-                    setShowRegenConfirm({
-                      id: admin.id,
-                      full_name: admin.full_name,
-                    })
-                  }
-                />
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
+      {/* Modals */}
       {showCreateModal && (
-        <CreateLGAAdminModal
+        <CreatePUAdminModal
+          viewerRole={viewerRole}
+          lockedLGA={viewerLGA}
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateSuccess}
         />
@@ -339,10 +316,10 @@ function LGAAdminsPanel() {
 }
 
 // ─────────────────────────────────────────
-// LGA ADMIN ROW
+// PU ADMIN ROW
 // ─────────────────────────────────────────
 
-function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
+function PUAdminRow({ admin, isEven, showLGA, onToggle, onRegen }) {
   const [toggling, setToggling] = useState(false);
   async function handleToggle() {
     setToggling(true);
@@ -356,7 +333,7 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
       <td className="px-4 py-3.5">
         <div className="flex items-center gap-3">
           <div
-            className={`w-[38px] h-[38px] rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${admin.is_active ? "bg-[#C8E6C9] text-[#1B5E20]" : "bg-[#EEEEEE] text-[#757575]"}`}
+            className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${admin.is_active ? "bg-[#C8E6C9] text-[#1B5E20]" : "bg-[#EEEEEE] text-[#757575]"}`}
           >
             {admin.full_name.charAt(0).toUpperCase()}
           </div>
@@ -365,16 +342,23 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
               {admin.full_name}
             </div>
             <div className="text-xs text-[#757575]">{admin.email}</div>
-            {admin.phone && (
-              <div className="text-[11px] text-[#757575]">{admin.phone}</div>
-            )}
           </div>
         </div>
       </td>
       <td className="px-4 py-3.5">
-        <span className="bg-[#E8F5E9] text-[#1B5E20] px-2.5 py-1 rounded-full text-xs font-semibold">
-          {admin.lga}
-        </span>
+        <div className="flex flex-col gap-1">
+          {showLGA && (
+            <span className="bg-[#E8F5E9] text-[#1B5E20] px-2 py-0.5 rounded-full text-xs font-semibold inline-block w-fit">
+              {admin.lga}
+            </span>
+          )}
+          <span className="text-[13px] text-[#212121] font-medium">
+            {admin.ward}
+          </span>
+          <span className="text-xs text-[#757575] flex items-center gap-1">
+            <span>📍</span> {admin.polling_unit}
+          </span>
+        </div>
       </td>
       <td className="px-4 py-3.5">
         <div className="flex flex-col gap-1">
@@ -384,7 +368,7 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
             {admin.is_active ? "● ACTIVE" : "● INACTIVE"}
           </span>
           {admin.must_change_password && admin.is_active && (
-            <span className="bg-[#FFF3E0] text-[#E65100] px-2 py-0.5 rounded-full text-[10px] font-semibold inline-block">
+            <span className="bg-[#FFF3E0] text-[#E65100] px-2 py-0.5 rounded-full text-[10px] font-semibold inline-block w-fit">
               PENDING SETUP
             </span>
           )}
@@ -396,9 +380,6 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
         ) : (
           <span className="text-[#BDBDBD] italic">Never</span>
         )}
-      </td>
-      <td className="px-4 py-3.5 text-[13px] text-[#757575]">
-        {formatDate(admin.created_at)}
       </td>
       <td className="px-4 py-3.5">
         <div className="flex gap-2">
@@ -426,18 +407,47 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
 }
 
 // ─────────────────────────────────────────
-// CREATE LGA ADMIN MODAL
+// CREATE PU ADMIN MODAL
 // ─────────────────────────────────────────
 
-function CreateLGAAdminModal({ onClose, onSuccess }) {
+function CreatePUAdminModal({ viewerRole, lockedLGA, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedLGA, setSelectedLGA] = useState(lockedLGA || "");
+  const [wards, setWards] = useState([]);
+  const [loadingWards, setLoadingWards] = useState(false);
+  const [selectedWard, setSelectedWard] = useState("");
+  const [pollingUnits, setPollingUnits] = useState([]);
+
+  useEffect(() => {
+    if (!selectedLGA) {
+      setWards([]);
+      setSelectedWard("");
+      setPollingUnits([]);
+      return;
+    }
+    setLoadingWards(true);
+    fetchLGAWards(selectedLGA).then((data) => {
+      setLoadingWards(false);
+      if (Array.isArray(data)) {
+        const wardList = data.map((w) =>
+          typeof w === "string" ? { name: w, polling_units: [] } : w,
+        );
+        setWards(wardList);
+      }
+    });
+  }, [selectedLGA]);
+
+  useEffect(() => {
+    const ward = wards.find((w) => w.name === selectedWard);
+    setPollingUnits(ward?.polling_units || []);
+  }, [selectedWard, wards]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const result = await createLGAAdmin(new FormData(e.currentTarget));
+    const result = await createPUAdmin(new FormData(e.currentTarget));
     setLoading(false);
     if (result?.error) {
       setError(result.error);
@@ -449,57 +459,141 @@ function CreateLGAAdminModal({ onClose, onSuccess }) {
   return (
     <Overlay onClose={onClose}>
       <ModalCard
-        title="Add LGA Admin"
+        title="Add Polling Unit Agent"
         subtitle="A secure password will be auto-generated."
         onClose={onClose}
-        width="480px"
+        width="520px"
       >
         {error && <ErrorBanner message={error} />}
         <form onSubmit={handleSubmit}>
-          <FormField
-            label="Full Name"
-            name="full_name"
-            placeholder="e.g. Adebayo Okafor"
-            required
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              label="Full Name"
+              name="full_name"
+              placeholder="e.g. Adebayo Okafor"
+              required
+            />
+            <FormField
+              label="Phone Number"
+              name="phone"
+              type="tel"
+              placeholder="+234 800 000 0000"
+            />
+          </div>
           <FormField
             label="Email Address"
             name="email"
             type="email"
-            placeholder="admin@example.com"
+            placeholder="agent@example.com"
             required
           />
-          <FormField
-            label="Phone Number"
-            name="phone"
-            type="tel"
-            placeholder="+234 800 000 0000"
-          />
+
+          {/* LGA */}
+          <div className="mb-4">
+            <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+              LGA <span className="text-red-600">*</span>
+            </label>
+            {lockedLGA ? (
+              <>
+                <input type="hidden" name="lga" value={lockedLGA} />
+                <div className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-[#F5F5F5] text-[#757575] flex items-center gap-2">
+                  <span>🔒</span> {lockedLGA}
+                </div>
+              </>
+            ) : (
+              <select
+                name="lga"
+                required
+                value={selectedLGA}
+                onChange={(e) => setSelectedLGA(e.target.value)}
+                className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150 cursor-pointer"
+              >
+                <option value="">Select LGA...</option>
+                {VALID_LGAS.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Ward */}
+          <div className="mb-4">
+            <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+              Ward <span className="text-red-600">*</span>
+            </label>
+            {loadingWards ? (
+              <div className="h-10 bg-[#EEEEEE] rounded-lg animate-pulse" />
+            ) : wards.length > 0 ? (
+              <select
+                name="ward"
+                required
+                value={selectedWard}
+                onChange={(e) => setSelectedWard(e.target.value)}
+                disabled={!selectedLGA}
+                className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150 cursor-pointer disabled:opacity-50"
+              >
+                <option value="">Select ward...</option>
+                {wards.map((w) => (
+                  <option key={w.name} value={w.name}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                name="ward"
+                required
+                placeholder="Enter ward name"
+                disabled={!selectedLGA}
+                className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-sm outline-none focus:border-[#1B5E20] transition-colors duration-150 disabled:opacity-50"
+              />
+            )}
+          </div>
+
+          {/* Polling Unit */}
           <div className="mb-5">
             <label className="block text-[13px] font-semibold text-[#212121] mb-2">
-              Assigned LGA <span className="text-red-600">*</span>
+              Polling Unit <span className="text-red-600">*</span>
             </label>
-            <select
-              name="lga"
-              required
-              className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer focus:border-[#1B5E20] transition-colors duration-150 box-border"
-            >
-              <option value="">Select LGA...</option>
-              {VALID_LGAS.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            {pollingUnits.length > 0 ? (
+              <select
+                name="polling_unit"
+                required
+                disabled={!selectedWard}
+                className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150 cursor-pointer disabled:opacity-50"
+              >
+                <option value="">Select polling unit...</option>
+                {pollingUnits.map((pu) => (
+                  <option key={pu} value={pu}>
+                    {pu}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                name="polling_unit"
+                required
+                placeholder="Enter polling unit name or code"
+                disabled={!selectedWard && wards.length > 0}
+                className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-sm outline-none focus:border-[#1B5E20] transition-colors duration-150 disabled:opacity-50"
+              />
+            )}
           </div>
+
           <div className="bg-[#E8F5E9] border border-[#C8E6C9] rounded-lg px-3.5 py-3 mb-6 text-xs text-[#2E7D32] leading-relaxed">
-            🔒 A 12-character password will be auto-generated. It will be
-            displayed <strong>once</strong>.
+            🔒 A 12-character cryptographically secure password will be
+            generated. It will be shown <strong>once</strong> and cannot be
+            retrieved again.
           </div>
+
           <div className="flex gap-3 justify-end">
             <SecondaryButton label="Cancel" onClick={onClose} />
             <PrimaryButton
-              label={loading ? "Creating..." : "Create Account"}
+              label={loading ? "Creating..." : "Create Agent"}
               type="submit"
               disabled={loading}
             />
@@ -525,7 +619,7 @@ function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
   return (
     <Overlay onClose={() => {}}>
       <ModalCard
-        title={isRegen ? "Password Regenerated" : "Account Created"}
+        title={isRegen ? "Password Regenerated" : "Agent Created"}
         subtitle={`Share this password securely with ${adminName}.`}
         width="480px"
         hideClose
@@ -535,12 +629,12 @@ function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
           <div className="text-[13px] text-[#5D4037] leading-relaxed">
             <strong>This password will not be shown again.</strong>
             <br />
-            Copy and share it via a secure channel. They will be required to
-            change it on first login.
+            Copy and share it via a secure channel. The agent must change it on
+            first login.
           </div>
         </div>
         <div className="text-[13px] text-[#757575] mb-2">
-          Admin: <strong className="text-[#212121]">{adminName}</strong>
+          Agent: <strong className="text-[#212121]">{adminName}</strong>
         </div>
         <div className="bg-[#1B5E20] rounded-[10px] px-6 py-5 mb-3 flex items-center justify-between gap-4">
           <code className="font-['Courier_New',monospace] text-[22px] font-bold text-white tracking-[3px]">
@@ -566,18 +660,22 @@ function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
   );
 }
 
+// ─────────────────────────────────────────
+// REGEN CONFIRM MODAL
+// ─────────────────────────────────────────
+
 function RegenConfirmModal({ adminName, loading, onConfirm, onClose }) {
   return (
     <Overlay onClose={onClose}>
       <ModalCard title="Regenerate Password?" width="420px" onClose={onClose}>
         <div className="bg-[#FFEBEE] border border-[#FFCDD2] rounded-lg p-3.5 mb-6 text-[13px] text-[#C62828] leading-[1.7]">
-          <strong>⚠️ This action will:</strong>
+          <strong>⚠️ This will:</strong>
           <ul className="mt-2 ml-4">
             <li>
               Generate a new password for <strong>{adminName}</strong>
             </li>
             <li>Immediately revoke all their active sessions</li>
-            <li>Force them to change their password on next login</li>
+            <li>Force them to change password on next login</li>
           </ul>
         </div>
         <div className="text-sm text-[#212121] mb-6">
@@ -598,7 +696,10 @@ function RegenConfirmModal({ adminName, loading, onConfirm, onClose }) {
   );
 }
 
-// Shared primitives
+// ─────────────────────────────────────────
+// SHARED PRIMITIVES
+// ─────────────────────────────────────────
+
 function Overlay({ children, onClose }) {
   return (
     <div
@@ -614,6 +715,7 @@ function Overlay({ children, onClose }) {
     </div>
   );
 }
+
 function ModalCard({
   title,
   subtitle,
@@ -639,7 +741,7 @@ function ModalCard({
         {!hideClose && onClose && (
           <button
             onClick={onClose}
-            className="bg-transparent border-none text-xl cursor-pointer text-[#757575] pl-4 leading-none"
+            className="bg-transparent border-none text-xl cursor-pointer text-[#757575] pl-4 leading-none hover:text-[#212121] transition-colors duration-150"
           >
             ×
           </button>
@@ -649,9 +751,10 @@ function ModalCard({
     </div>
   );
 }
+
 function FormField({ label, name, type = "text", placeholder, required }) {
   return (
-    <div className="mb-5">
+    <div className="mb-4">
       <label className="block text-[13px] font-semibold text-[#212121] mb-2">
         {label} {required && <span className="text-red-600">*</span>}
       </label>
@@ -660,11 +763,12 @@ function FormField({ label, name, type = "text", placeholder, required }) {
         name={name}
         placeholder={placeholder}
         required={required}
-        className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm outline-none focus:border-[#1B5E20] transition-colors duration-150 box-border"
+        className="w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-sm outline-none focus:border-[#1B5E20] transition-colors duration-150 box-border"
       />
     </div>
   );
 }
+
 function PrimaryButton({
   label,
   onClick,
@@ -683,6 +787,7 @@ function PrimaryButton({
     </button>
   );
 }
+
 function SecondaryButton({ label, onClick }) {
   return (
     <button
@@ -694,6 +799,7 @@ function SecondaryButton({ label, onClick }) {
     </button>
   );
 }
+
 function ErrorBanner({ message }) {
   return (
     <div className="bg-[#FFEBEE] border border-[#FFCDD2] rounded-lg px-3.5 py-3 mb-5 text-[13px] text-[#C62828]">
@@ -701,6 +807,38 @@ function ErrorBanner({ message }) {
     </div>
   );
 }
+
+function SkeletonRows() {
+  return (
+    <div className="p-6 space-y-2">
+      {[...Array(5)].map((_, i) => (
+        <div
+          key={i}
+          className="h-[60px] bg-[#F5F5F5] rounded-lg animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ hasFilters }) {
+  return (
+    <div className="px-6 py-[60px] text-center">
+      <div className="text-[40px] mb-4">📍</div>
+      <div className="text-base font-semibold text-[#212121] mb-2">
+        {hasFilters
+          ? "No agents match your filters"
+          : "No Polling Unit Agents yet"}
+      </div>
+      <div className="text-[13px] text-[#757575]">
+        {hasFilters
+          ? "Try adjusting your search or filter criteria."
+          : 'Click "Add PU Agent" to register the first agent.'}
+      </div>
+    </div>
+  );
+}
+
 function formatDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-NG", {
