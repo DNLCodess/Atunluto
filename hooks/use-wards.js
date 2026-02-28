@@ -1,33 +1,25 @@
-// lib/hooks/use-oyo-south-wards.js
-// React Query hooks for Oyo South ward reference data
-// Sourced from oyo_south_wards table (INEC-verified data)
+/**
+ * hooks/use-oyo-south-wards.js
+ * Ward reference data sourced from INEC — 99 wards across 9 LGAs.
+ */
 
 import { useQuery } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
+import { fetchLGAWards } from "@/app/actions/results-fetch";
 
-const supabase = createClient();
-
-// ── All wards for a given LGA ──────────────────────────────────────────────
 export function useWardsForLGA(lga) {
   return useQuery({
     queryKey: ["oyo-south-wards", lga],
     queryFn: async () => {
-      if (!lga) return [];
-      const { data, error } = await supabase
-        .from("oyo_south_wards")
-        .select("ward_number, ward_name")
-        .eq("lga", lga)
-        .order("ward_number", { ascending: true });
-      if (error) throw error;
+      const data = await fetchLGAWards(lga);
+      if (data?.error) throw new Error(data.error);
       return data;
     },
     enabled: Boolean(lga),
-    staleTime: Infinity, // Ward data never changes mid-session
-    gcTime: 24 * 60 * 60 * 1000, // Keep in cache 24h
+    staleTime: Infinity,
+    gcTime: 24 * 60 * 60 * 1000,
   });
 }
 
-// ── All LGAs (distinct) ────────────────────────────────────────────────────
 export const OYO_SOUTH_LGAS = [
   "Ibadan North",
   "Ibadan North-East",
@@ -40,7 +32,6 @@ export const OYO_SOUTH_LGAS = [
   "Ido",
 ];
 
-// ── Ward count per LGA (for display) ──────────────────────────────────────
 export const LGA_WARD_COUNT = {
   "Ibadan North": 12,
   "Ibadan North-East": 12,

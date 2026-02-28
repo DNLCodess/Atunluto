@@ -25,3 +25,34 @@ export async function fetchLGAAdmins() {
   if (error) return { error: error.message };
   return data;
 }
+
+export async function fetchPUAdmins(lgaFilter) {
+  const session = await getResultsSession();
+  if (!session || !["state_admin", "lga_admin"].includes(session.role))
+    return { error: "Unauthorised." };
+
+  // LGA admin can only see their own LGA's PU admins
+  const effectiveLga = session.role === "lga_admin" ? session.lga : lgaFilter;
+
+  const supabase = createAdminClient();
+  let query = supabase
+    .from("election_admins")
+    .select(
+      `
+      id, email, full_name, phone, lga, ward, polling_unit,
+      role, is_active, must_change_password,
+      last_login, created_at,
+      creator:created_by ( full_name )
+    `,
+    )
+    .eq("role", "polling_unit_admin")
+    .order("lga")
+    .order("ward")
+    .order("created_at", { ascending: false });
+
+  if (effectiveLga) query = query.eq("lga", effectiveLga);
+
+  const { data, error } = await query;
+  if (error) return { error: error.message };
+  return data;
+}

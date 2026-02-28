@@ -2,11 +2,11 @@
 
 /**
  * app/results-portal/lga/agents/page.jsx
- * LGA Admin — Manage Polling Unit Agents in their LGA
+ * LGA Admin — manage PU Agents for their assigned LGA.
  */
 
 import { useEffect, useState } from "react";
-import PollingUnitAdminsManager from "@/components/erms/PollingUnitAdminsManager";
+import PollingUnitAdminsManager from "@/components/shared/rp/pu/manager";
 
 export default function LGAAgentsPage() {
   const [lga, setLga] = useState("");
@@ -19,14 +19,15 @@ export default function LGAAgentsPage() {
 
   if (!lga) {
     return (
-      <div className="p-8 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#1B5E20] border-t-transparent rounded-full animate-spin" />
+      <div className="p-8">
+        <div className="h-8 w-48 bg-[#F5F5F5] rounded-lg animate-pulse mb-4" />
+        <div className="h-4 w-96 bg-[#F5F5F5] rounded animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="p-8 font-[Poppins,sans-serif]">
+    <div className="p-8">
       <PollingUnitAdminsManager viewerRole="lga_admin" viewerLGA={lga} />
     </div>
   );

@@ -2,10 +2,11 @@
 
 /**
  * app/results-portal/admin/admins/page.jsx
- * State Admin — Account Management with tabs for LGA Admins and PU Agents.
+ * State Admin — Admin account management.
+ * Tabs: LGA Admins | PU Agents
  */
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import {
   useLGAAdmins,
   useToggleLGAAdminStatus,
@@ -32,56 +33,33 @@ export default function AdminsPage() {
   const [activeTab, setActiveTab] = useState("lga");
 
   return (
-    <div className="p-8 font-[Poppins,sans-serif] text-[#212121]">
-      {/* Page header */}
-      <div className="mb-8">
-        <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mb-1.5">
-          Account Management
-        </h1>
-        <p className="text-[#757575] text-sm">
-          Manage LGA Admins and Polling Unit Agents across Oyo South Senatorial
-          District
-        </p>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-[#F5F5F5] p-1 rounded-xl mb-8 w-fit">
+    <div className="font-[Poppins,sans-serif] text-[#212121] p-8">
+      <div className="flex gap-1 bg-[#F5F5F5] rounded-xl p-1.5 mb-8 w-fit border border-[#E0E0E0]">
         {[
-          { id: "lga", label: "👥 LGA Admins", desc: "9 LGA administrators" },
-          { id: "pu", label: "📍 PU Agents", desc: "Polling unit agents" },
-        ].map(({ id, label }) => (
+          { id: "lga", label: "🏛️ LGA Admins" },
+          { id: "pu", label: "📍 PU Agents" },
+        ].map((tab) => (
           <button
-            key={id}
-            onClick={() => setActiveTab(id)}
-            className={`px-5 py-2.5 rounded-lg text-sm font-semibold border-none cursor-pointer transition-all duration-200 ${
-              activeTab === id
-                ? "bg-[#1B5E20] text-white shadow-md"
-                : "bg-transparent text-[#757575] hover:text-[#212121]"
-            }`}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150 border-none cursor-pointer ${activeTab === tab.id ? "bg-white text-[#1B5E20] shadow-sm" : "bg-transparent text-[#757575] hover:text-[#212121]"}`}
           >
-            {label}
+            {tab.label}
           </button>
         ))}
       </div>
-
-      {/* Tab content */}
       {activeTab === "lga" ? (
         <LGAAdminsPanel />
       ) : (
-        <PollingUnitAdminsManager viewerRole="state_admin" viewerLGA={null} />
+        <PollingUnitAdminsManager viewerRole="state_admin" />
       )}
     </div>
   );
 }
 
-// ─────────────────────────────────────────
-// LGA ADMINS PANEL (extracted from original page)
-// ─────────────────────────────────────────
-
 function LGAAdminsPanel() {
   const { data: admins = [], isLoading, isError } = useLGAAdmins();
   const toggleStatus = useToggleLGAAdminStatus();
-
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(null);
   const [showRegenConfirm, setShowRegenConfirm] = useState(null);
@@ -112,7 +90,6 @@ function LGAAdminsPanel() {
     setShowRegenConfirm(null);
     if (result?.error) return alert(result.error);
     setShowPasswordModal({
-      adminId: showRegenConfirm.id,
       adminName: showRegenConfirm.full_name,
       password: result.plainPassword,
       isRegen: true,
@@ -122,7 +99,6 @@ function LGAAdminsPanel() {
   function handleCreateSuccess(data) {
     setShowCreateModal(false);
     setShowPasswordModal({
-      adminId: data.admin.id,
       adminName: data.admin.full_name,
       password: data.plainPassword,
       isRegen: false,
@@ -131,51 +107,41 @@ function LGAAdminsPanel() {
 
   return (
     <div>
-      {/* Sub-header */}
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-8">
         <div>
-          <h2 className="font-[Montserrat,sans-serif] text-xl font-extrabold text-[#1B5E20] mb-1">
+          <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mt-0 mb-1.5">
             LGA Admin Accounts
-          </h2>
+          </h1>
           <p className="text-[#757575] text-sm">
             Manage field administrators for the 9 Local Government Areas
           </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="bg-[#1B5E20] hover:bg-[#2E7D32] text-white border-none rounded-xl px-6 py-3 text-sm font-semibold cursor-pointer flex items-center gap-2 transition-colors duration-150"
+          className="bg-[#1B5E20] text-white border-none rounded-[10px] px-6 py-3 text-sm font-semibold cursor-pointer flex items-center gap-2"
         >
-          <span className="text-lg leading-none">+</span> Add LGA Admin
+          <span className="text-[18px]">+</span> Add LGA Admin
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 mb-7">
+      <div className="grid grid-cols-3 gap-4 mb-7">
         {[
-          {
-            label: "Total Admins",
-            value: admins.length,
-            color: "text-[#1B5E20]",
-          },
-          { label: "Active", value: totalActive, color: "text-[#2E7D32]" },
-          {
-            label: "Pending Setup",
-            value: totalPending,
-            color: "text-orange-700",
-          },
-          { label: "Inactive", value: totalInactive, color: "text-[#757575]" },
+          { label: "Total Admins", value: admins.length, color: "#1B5E20" },
+          { label: "Active", value: totalActive, color: "#2E7D32" },
+          { label: "Pending Setup", value: totalPending, color: "#E65100" },
+          { label: "Inactive", value: totalInactive, color: "#757575" },
           {
             label: "LGAs Covered",
             value: new Set(admins.filter((a) => a.is_active).map((a) => a.lga))
               .size,
-            color: "text-[#2E7D32]",
+            color: "#2E7D32",
           },
           {
             label: "LGAs Missing",
             value:
               VALID_LGAS.length -
               new Set(admins.filter((a) => a.is_active).map((a) => a.lga)).size,
-            color: "text-red-800",
+            color: "#C62828",
           },
         ].map(({ label, value, color }) => (
           <div
@@ -183,7 +149,8 @@ function LGAAdminsPanel() {
             className="bg-white rounded-xl px-6 py-5 border border-[#E0E0E0]"
           >
             <div
-              className={`font-[Montserrat,sans-serif] text-[28px] font-extrabold ${color}`}
+              className="text-[28px] font-bold font-[Montserrat,sans-serif]"
+              style={{ color }}
             >
               {value}
             </div>
@@ -194,18 +161,17 @@ function LGAAdminsPanel() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border border-[#E0E0E0] px-5 py-4 mb-5 flex gap-3 flex-wrap items-center">
         <input
           placeholder="Search by name or email..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 min-w-[200px] px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] outline-none focus:border-[#1B5E20] transition-colors duration-150"
+          className="flex-1 min-w-[200px] px-3.5 py-[9px] border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] outline-none focus:border-[#1B5E20]"
         />
         <select
           value={lgaFilter}
           onChange={(e) => setLgaFilter(e.target.value)}
-          className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer focus:border-[#1B5E20] transition-colors duration-150"
+          className="px-3.5 py-[9px] border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer"
         >
           <option value="">All LGAs</option>
           {VALID_LGAS.map((l) => (
@@ -217,7 +183,7 @@ function LGAAdminsPanel() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer focus:border-[#1B5E20] transition-colors duration-150"
+          className="px-3.5 py-[9px] border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer"
         >
           <option value="">All Status</option>
           <option value="true">Active</option>
@@ -230,7 +196,7 @@ function LGAAdminsPanel() {
               setLgaFilter("");
               setStatusFilter("");
             }}
-            className="px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] cursor-pointer bg-[#F5F5F5] text-[#757575]"
+            className="px-3.5 py-[9px] border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] cursor-pointer bg-[#F5F5F5] text-[#757575]"
           >
             Clear
           </button>
@@ -240,19 +206,18 @@ function LGAAdminsPanel() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-xl border border-[#E0E0E0] overflow-hidden">
         {isLoading ? (
-          <div className="p-6 space-y-2">
+          <div className="p-6">
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="h-[60px] bg-[#F5F5F5] rounded-lg animate-pulse"
+                className="h-[60px] bg-[#F5F5F5] rounded-lg mb-2 animate-pulse"
               />
             ))}
           </div>
         ) : isError ? (
-          <div className="p-10 text-center text-red-700">
+          <div className="p-10 text-center text-[#C62828]">
             Failed to load admin accounts. Please refresh.
           </div>
         ) : filtered.length === 0 ? (
@@ -265,8 +230,8 @@ function LGAAdminsPanel() {
             </div>
             <div className="text-[13px] text-[#757575]">
               {searchQuery || lgaFilter || statusFilter
-                ? "Try adjusting your criteria."
-                : 'Click "Add LGA Admin" to create the first administrator.'}
+                ? "Try adjusting your filters."
+                : 'Click "Add LGA Admin" to create the first field administrator.'}
             </div>
           </div>
         ) : (
@@ -292,7 +257,7 @@ function LGAAdminsPanel() {
             </thead>
             <tbody>
               {filtered.map((admin, i) => (
-                <LGAAdminRow
+                <AdminRow
                   key={admin.id}
                   admin={admin}
                   isEven={i % 2 === 0}
@@ -313,7 +278,7 @@ function LGAAdminsPanel() {
       </div>
 
       {showCreateModal && (
-        <CreateLGAAdminModal
+        <CreateAdminModal
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateSuccess}
         />
@@ -338,11 +303,7 @@ function LGAAdminsPanel() {
   );
 }
 
-// ─────────────────────────────────────────
-// LGA ADMIN ROW
-// ─────────────────────────────────────────
-
-function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
+function AdminRow({ admin, isEven, onToggle, onRegen }) {
   const [toggling, setToggling] = useState(false);
   async function handleToggle() {
     setToggling(true);
@@ -351,7 +312,7 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
   }
   return (
     <tr
-      className={`${isEven ? "bg-white" : "bg-[#FAFAFA]"} border-b border-[#E0E0E0] hover:bg-green-50/30 transition-colors duration-100`}
+      className={`${isEven ? "bg-white" : "bg-[#FAFAFA]"} border-b border-[#E0E0E0]`}
     >
       <td className="px-4 py-3.5">
         <div className="flex items-center gap-3">
@@ -404,14 +365,14 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
         <div className="flex gap-2">
           <button
             onClick={onRegen}
-            className="px-3 py-1.5 bg-transparent border-[1.5px] border-[#1B5E20] text-[#1B5E20] rounded-md text-xs font-semibold cursor-pointer hover:bg-green-50 transition-colors duration-150"
+            className="px-3 py-1.5 bg-transparent border-[1.5px] border-[#1B5E20] text-[#1B5E20] rounded-md text-xs font-semibold cursor-pointer"
           >
             🔑 Regen
           </button>
           <button
             onClick={handleToggle}
             disabled={toggling}
-            className={`px-3 py-1.5 bg-transparent border-[1.5px] rounded-md text-xs font-semibold transition-colors duration-150 ${toggling ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${admin.is_active ? "border-red-400 text-red-700 hover:bg-red-50" : "border-[#2E7D32] text-[#2E7D32] hover:bg-green-50"}`}
+            className={`px-3 py-1.5 bg-transparent border-[1.5px] rounded-md text-xs font-semibold ${admin.is_active ? "border-[#C62828] text-[#C62828]" : "border-[#2E7D32] text-[#2E7D32]"} ${toggling ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
           >
             {toggling
               ? "..."
@@ -425,14 +386,9 @@ function LGAAdminRow({ admin, isEven, onToggle, onRegen }) {
   );
 }
 
-// ─────────────────────────────────────────
-// CREATE LGA ADMIN MODAL
-// ─────────────────────────────────────────
-
-function CreateLGAAdminModal({ onClose, onSuccess }) {
+function CreateAdminModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
@@ -445,7 +401,6 @@ function CreateLGAAdminModal({ onClose, onSuccess }) {
     }
     onSuccess(result);
   }
-
   return (
     <Overlay onClose={onClose}>
       <ModalCard
@@ -454,11 +409,16 @@ function CreateLGAAdminModal({ onClose, onSuccess }) {
         onClose={onClose}
         width="480px"
       >
-        {error && <ErrorBanner message={error} />}
+        {error && (
+          <div className="bg-[#FFEBEE] border border-[#FFCDD2] rounded-lg px-3.5 py-3 mb-5 text-[13px] text-[#C62828]">
+            ⚠️ {error}
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <FormField
             label="Full Name"
             name="full_name"
+            type="text"
             placeholder="e.g. Adebayo Okafor"
             required
           />
@@ -477,12 +437,12 @@ function CreateLGAAdminModal({ onClose, onSuccess }) {
           />
           <div className="mb-5">
             <label className="block text-[13px] font-semibold text-[#212121] mb-2">
-              Assigned LGA <span className="text-red-600">*</span>
+              Assigned LGA <span className="text-[#C62828]">*</span>
             </label>
             <select
               name="lga"
               required
-              className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer focus:border-[#1B5E20] transition-colors duration-150 box-border"
+              className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer box-border"
             >
               <option value="">Select LGA...</option>
               {VALID_LGAS.map((l) => (
@@ -493,26 +453,30 @@ function CreateLGAAdminModal({ onClose, onSuccess }) {
             </select>
           </div>
           <div className="bg-[#E8F5E9] border border-[#C8E6C9] rounded-lg px-3.5 py-3 mb-6 text-xs text-[#2E7D32] leading-relaxed">
-            🔒 A 12-character password will be auto-generated. It will be
-            displayed <strong>once</strong>.
+            🔒 A 12-character password will be generated automatically. It will
+            be displayed <strong>once</strong>.
           </div>
           <div className="flex gap-3 justify-end">
-            <SecondaryButton label="Cancel" onClick={onClose} />
-            <PrimaryButton
-              label={loading ? "Creating..." : "Create Account"}
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-[11px] bg-white text-[#212121] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm font-medium cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
               type="submit"
               disabled={loading}
-            />
+              className={`px-6 py-[11px] text-white border-none rounded-lg text-sm font-semibold ${loading ? "bg-[#A5D6A7] cursor-not-allowed" : "bg-[#1B5E20] cursor-pointer"}`}
+            >
+              {loading ? "Creating..." : "Create Account"}
+            </button>
           </div>
         </form>
       </ModalCard>
     </Overlay>
   );
 }
-
-// ─────────────────────────────────────────
-// PASSWORD DISPLAY MODAL
-// ─────────────────────────────────────────
 
 function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -526,7 +490,7 @@ function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
     <Overlay onClose={() => {}}>
       <ModalCard
         title={isRegen ? "Password Regenerated" : "Account Created"}
-        subtitle={`Share this password securely with ${adminName}.`}
+        subtitle={`Share securely with ${adminName}.`}
         width="480px"
         hideClose
       >
@@ -535,8 +499,7 @@ function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
           <div className="text-[13px] text-[#5D4037] leading-relaxed">
             <strong>This password will not be shown again.</strong>
             <br />
-            Copy and share it via a secure channel. They will be required to
-            change it on first login.
+            Share via a secure channel. Must be changed on first login.
           </div>
         </div>
         <div className="text-[13px] text-[#757575] mb-2">
@@ -548,7 +511,7 @@ function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
           </code>
           <button
             onClick={handleCopy}
-            className={`border border-white/30 rounded-lg px-4 py-2 text-white text-[13px] font-semibold cursor-pointer whitespace-nowrap transition-colors duration-200 ${copied ? "bg-[#4CAF50]" : "bg-white/15 hover:bg-white/25"}`}
+            className={`border border-white/30 rounded-lg px-4 py-2 text-white text-[13px] font-semibold cursor-pointer whitespace-nowrap transition-colors duration-200 ${copied ? "bg-[#4CAF50]" : "bg-white/15"}`}
           >
             {copied ? "✅ Copied!" : "📋 Copy"}
           </button>
@@ -556,11 +519,12 @@ function PasswordDisplayModal({ adminName, password, isRegen, onClose }) {
         <div className="text-[11px] text-[#757575] mb-7 text-center">
           12-character password · Alphanumeric + symbols
         </div>
-        <PrimaryButton
-          label="I've copied the password — Close"
+        <button
           onClick={onClose}
-          fullWidth
-        />
+          className="w-full px-6 py-[11px] bg-[#1B5E20] text-white border-none rounded-lg text-sm font-semibold cursor-pointer"
+        >
+          I've copied the password — Close
+        </button>
       </ModalCard>
     </Overlay>
   );
@@ -571,24 +535,26 @@ function RegenConfirmModal({ adminName, loading, onConfirm, onClose }) {
     <Overlay onClose={onClose}>
       <ModalCard title="Regenerate Password?" width="420px" onClose={onClose}>
         <div className="bg-[#FFEBEE] border border-[#FFCDD2] rounded-lg p-3.5 mb-6 text-[13px] text-[#C62828] leading-[1.7]">
-          <strong>⚠️ This action will:</strong>
-          <ul className="mt-2 ml-4">
+          <strong>⚠️ This will:</strong>
+          <ul className="mt-2 ml-4 pl-1">
             <li>
               Generate a new password for <strong>{adminName}</strong>
             </li>
-            <li>Immediately revoke all their active sessions</li>
-            <li>Force them to change their password on next login</li>
+            <li>Revoke all active sessions</li>
+            <li>Force password change on next login</li>
           </ul>
         </div>
-        <div className="text-sm text-[#212121] mb-6">
-          Are you sure you want to continue?
-        </div>
         <div className="flex gap-3 justify-end">
-          <SecondaryButton label="Cancel" onClick={onClose} />
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 bg-white text-[#212121] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm font-medium cursor-pointer"
+          >
+            Cancel
+          </button>
           <button
             onClick={onConfirm}
             disabled={loading}
-            className={`px-6 py-2.5 bg-[#C62828] text-white border-none rounded-lg text-sm font-semibold ${loading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-red-800"} transition-colors duration-150`}
+            className={`px-6 py-2.5 bg-[#C62828] text-white border-none rounded-lg text-sm font-semibold ${loading ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
           >
             {loading ? "Regenerating..." : "Yes, Regenerate"}
           </button>
@@ -598,12 +564,11 @@ function RegenConfirmModal({ adminName, loading, onConfirm, onClose }) {
   );
 }
 
-// Shared primitives
 function Overlay({ children, onClose }) {
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/55 backdrop-blur-[2px] flex items-center justify-center z-[100] p-6"
+      className="fixed inset-0 bg-black/55 backdrop-blur-[2px] flex items-center justify-center z-50 p-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -614,6 +579,7 @@ function Overlay({ children, onClose }) {
     </div>
   );
 }
+
 function ModalCard({
   title,
   subtitle,
@@ -649,58 +615,24 @@ function ModalCard({
     </div>
   );
 }
-function FormField({ label, name, type = "text", placeholder, required }) {
+
+function FormField({ label, name, type, placeholder, required }) {
   return (
     <div className="mb-5">
       <label className="block text-[13px] font-semibold text-[#212121] mb-2">
-        {label} {required && <span className="text-red-600">*</span>}
+        {label} {required && <span className="text-[#C62828]">*</span>}
       </label>
       <input
         type={type}
         name={name}
         placeholder={placeholder}
         required={required}
-        className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm outline-none focus:border-[#1B5E20] transition-colors duration-150 box-border"
+        className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm outline-none box-border transition-colors duration-200 focus:border-[#1B5E20]"
       />
     </div>
   );
 }
-function PrimaryButton({
-  label,
-  onClick,
-  type = "button",
-  disabled,
-  fullWidth,
-}) {
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`px-6 py-[11px] text-white border-none rounded-lg text-sm font-semibold transition-colors duration-150 ${disabled ? "bg-[#A5D6A7] cursor-not-allowed" : "bg-[#1B5E20] hover:bg-[#2E7D32] cursor-pointer"} ${fullWidth ? "w-full" : ""}`}
-    >
-      {label}
-    </button>
-  );
-}
-function SecondaryButton({ label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="px-6 py-[11px] bg-white hover:bg-[#F5F5F5] text-[#212121] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm font-medium cursor-pointer transition-colors duration-150"
-    >
-      {label}
-    </button>
-  );
-}
-function ErrorBanner({ message }) {
-  return (
-    <div className="bg-[#FFEBEE] border border-[#FFCDD2] rounded-lg px-3.5 py-3 mb-5 text-[13px] text-[#C62828]">
-      ⚠️ {message}
-    </div>
-  );
-}
+
 function formatDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-NG", {

@@ -31,7 +31,7 @@ export async function getResultImageUploadUrl({
   fileSize,
 }) {
   const session = await getResultsSession();
-  if (!session || session.role !== "lga_admin")
+  if (!session || !["lga_admin", "polling_unit_admin"].includes(session.role))
     return { error: "Unauthorised." };
 
   if (fileSize > 10 * 1024 * 1024)
@@ -42,7 +42,8 @@ export async function getResultImageUploadUrl({
     return { error: "Only JPEG and PNG are allowed." };
 
   const ext = fileName.split(".").pop().toLowerCase();
-  const path = `${session.lga}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const ward = session.ward ? `/${session.ward.replace(/\s+/g, "_")}` : "";
+  const path = `${session.lga}${ward}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   const supabase = createAdminClient();
 
   const { data, error } = await supabase.storage
@@ -56,7 +57,7 @@ export async function getResultImageUploadUrl({
 
 export async function submitElectionResult(payload) {
   const session = await getResultsSession();
-  if (!session || session.role !== "lga_admin")
+  if (!session || !["lga_admin", "polling_unit_admin"].includes(session.role))
     return { error: "Unauthorised." };
 
   const {

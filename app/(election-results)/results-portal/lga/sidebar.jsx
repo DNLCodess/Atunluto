@@ -1,21 +1,10 @@
 "use client";
 
-/**
- * app/results-portal/lga/LGASidebarNav.jsx
- * Client component — active route highlighting via usePathname.
- */
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { href: "/results-portal/lga", label: "Dashboard", icon: "🏠", exact: true },
-  {
-    href: "/results-portal/lga/agents",
-    label: "PU Agents",
-    icon: "📍",
-    exact: false,
-  },
   {
     href: "/results-portal/lga/submit",
     label: "Submit Result",
@@ -26,6 +15,12 @@ const NAV_ITEMS = [
     href: "/results-portal/lga/results",
     label: "My Results",
     icon: "📋",
+    exact: false,
+  },
+  {
+    href: "/results-portal/lga/agents",
+    label: "PU Agents",
+    icon: "📍",
     exact: false,
   },
   {
@@ -65,23 +60,16 @@ export default function LGASidebarNav() {
             `}
             aria-current={isActive ? "page" : undefined}
           >
-            {/* Active indicator bar */}
             {isActive && (
               <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[#A5D6A7] rounded-full" />
             )}
-
             <span
-              className={`
-              w-5 h-5 flex items-center justify-center text-sm transition-opacity
-              ${isActive ? "opacity-100" : "opacity-75 group-hover:opacity-100"}
-            `}
+              className={`w-5 h-5 flex items-center justify-center text-sm transition-opacity
+              ${isActive ? "opacity-100" : "opacity-75 group-hover:opacity-100"}`}
             >
               {icon}
             </span>
-
             <span className="tracking-wide flex-1">{label}</span>
-
-            {/* Active dot */}
             {isActive && (
               <span className="w-1.5 h-1.5 rounded-full bg-[#A5D6A7] shrink-0" />
             )}

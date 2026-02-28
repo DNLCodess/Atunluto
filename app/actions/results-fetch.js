@@ -36,12 +36,16 @@ export async function fetchLGAWards(lga) {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
-      .from("lgas")
-      .select("wards")
-      .eq("name", lga)
-      .single();
+      .from("oyo_south_wards")
+      .select("ward_number, ward_name")
+      .eq("lga", lga)
+      .order("ward_number", { ascending: true });
     if (error) return { error: error.message };
-    return data?.wards || [];
+    return (data || []).map((w) => ({
+      name: w.ward_name,
+      ward_number: w.ward_number,
+      polling_units: [],
+    }));
   } catch (err) {
     return { error: err.message };
   }

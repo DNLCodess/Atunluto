@@ -12,7 +12,7 @@ import { headers } from "next/headers";
 
 export async function getEvidenceUploadUrl({ fileName, fileType, fileSize }) {
   const session = await getResultsSession();
-  if (!session || session.role !== "lga_admin")
+  if (!session || !["lga_admin", "polling_unit_admin"].includes(session.role))
     return { error: "Unauthorised." };
 
   if (fileSize > 10 * 1024 * 1024)
@@ -42,10 +42,33 @@ export async function getEvidenceUploadUrl({ fileName, fileType, fileSize }) {
 
 export async function fileSecurityReport(payload) {
   const session = await getResultsSession();
-  if (!session || session.role !== "lga_admin")
+  if (!session || !["lga_admin", "polling_unit_admin"].includes(session.role))
     return { error: "Unauthorised." };
 
-  const { report_type, urgency, description, evidencePath } = payload;
+  // Accept both FormData and plain objects
+  const isFormData = typeof payload?.get === "function";
+  const raw_type = isFormData
+    ? payload.get("report_type")
+    : payload.report_type;
+  const urgency = isFormData ? payload.get("urgency") : payload.urgency;
+  const description = isFormData
+    ? payload.get("description")
+    : payload.description;
+  const evidencePath = isFormData
+    ? payload.get("evidencePath")
+    : payload.evidencePath;
+
+  // Normalise report type: "Tampering" → "tampering", "Unauthorised Access" → "unauthorized_access"
+  const TYPE_MAP = {
+    tampering: "tampering",
+    "unauthorised access": "unauthorized_access",
+    "unauthorized access": "unauthorized_access",
+    "suspicious activity": "suspicious_activity",
+    other: "other",
+  };
+  const report_type =
+    TYPE_MAP[raw_type?.toLowerCase?.().trim()] ??
+    raw_type?.toLowerCase?.().replace(/\s+/g, "_").trim();
 
   if (!report_type) return { error: "Report type is required." };
   if (!urgency) return { error: "Urgency level is required." };

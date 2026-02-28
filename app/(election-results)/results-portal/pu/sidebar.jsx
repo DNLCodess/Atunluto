@@ -34,15 +34,15 @@ const NAV_ITEMS = [
 export default function PUSidebarNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Main navigation">
+    <nav aria-label="PU Admin Navigation">
       {NAV_ITEMS.map(({ href, label, icon, exact }) => {
         const isActive = exact ? pathname === href : pathname.startsWith(href);
         return (
           <Link
             key={href}
             href={href}
-            className={`flex items-center gap-3 px-3 py-2.5 my-0.5 rounded-lg text-[13px] font-medium transition-all duration-150 no-underline group relative ${isActive ? "bg-white/20 text-white" : "text-white/65 hover:text-white hover:bg-white/10"}`}
             aria-current={isActive ? "page" : undefined}
+            className={`flex items-center gap-3 px-3 py-2.5 my-0.5 rounded-lg text-[13px] font-medium transition-all duration-150 no-underline group relative ${isActive ? "bg-white/20 text-white" : "text-white/65 hover:text-white hover:bg-white/10"}`}
           >
             {isActive && (
               <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[#A5D6A7] rounded-full" />

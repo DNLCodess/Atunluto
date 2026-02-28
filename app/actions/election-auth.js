@@ -401,11 +401,13 @@ export async function createLGAAdmin(formData) {
     });
 
   if (authError) {
-    if (authError.message?.includes("already registered")) {
-      return { error: "An account with this email already exists." };
+    if (authError.code === "email_exists" || authError.status === 422) {
+      return { error: "An account with this email address already exists." };
     }
     logError("createLGAAdmin", "Supabase Auth creation failed:", authError);
-    return { error: "Failed to create account. Please try again." };
+    return {
+      error: `Account creation failed: ${authError.message || "Unknown error"}`,
+    };
   }
 
   log("createLGAAdmin", "Auth user created:", authUser.user.id);
@@ -629,4 +631,233 @@ async function logAuthEvent(
   } catch (err) {
     logError("logAuthEvent", "Unexpected exception:", err);
   }
+}
+
+// ─────────────────────────────────────────
+// CREATE POLLING UNIT ADMIN
+// ─────────────────────────────────────────
+
+export async function createPUAdmin(formData) {
+  const session = await getResultsSession();
+  if (!session || !["state_admin", "lga_admin"].includes(session.role))
+    return { error: "Unauthorised." };
+
+  const fullName = formData.get("full_name")?.toString().trim();
+  const email = formData.get("email")?.toString().trim().toLowerCase();
+  const phone = formData.get("phone")?.toString().trim();
+  const lga = formData.get("lga")?.toString().trim();
+  const ward = formData.get("ward")?.toString().trim();
+  const pollingUnit = formData.get("polling_unit")?.toString().trim();
+
+  if (!fullName || !email || !lga || !ward || !pollingUnit)
+    return {
+      error: "Full name, email, LGA, ward, and polling unit are required.",
+    };
+
+  // LGA admins can only create PU admins for their own LGA
+  if (session.role === "lga_admin" && lga !== session.lga)
+    return { error: "You can only create PU Admins for your assigned LGA." };
+
+  const VALID_LGAS = [
+    "Ibadan North",
+    "Ibadan North-East",
+    "Ibadan North-West",
+    "Ibadan South-East",
+    "Ibadan South-West",
+    "Ibarapa Central",
+    "Ibarapa East",
+    "Ibarapa North",
+    "Ido",
+  ];
+  if (!VALID_LGAS.includes(lga)) return { error: "Invalid LGA selected." };
+
+  const plainPassword = generateSecurePassword(12);
+  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+
+  const supabase = createAdminClient();
+  const hdrs = await headers();
+  const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+  const userAgent = hdrs.get("user-agent") || "unknown";
+
+  log("createPUAdmin", "Creating user in Supabase Auth...");
+  const { data: authUser, error: authError } =
+    await supabase.auth.admin.createUser({
+      email,
+      password: plainPassword,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        role: "polling_unit_admin",
+        lga,
+        ward,
+        polling_unit: pollingUnit,
+      },
+    });
+
+  if (authError) {
+    if (authError.code === "email_exists" || authError.status === 422)
+      return { error: "An account with this email address already exists." };
+    logError("createPUAdmin", "Auth creation failed:", authError);
+    return {
+      error: `Account creation failed: ${authError.message || "Unknown error"}`,
+    };
+  }
+
+  const { data: newAdmin, error } = await supabase
+    .from("election_admins")
+    .insert({
+      id: authUser.user.id,
+      email,
+      full_name: fullName,
+      phone: phone || null,
+      lga,
+      ward,
+      polling_unit: pollingUnit,
+      role: "polling_unit_admin",
+      password_hash: passwordHash,
+      must_change_password: true,
+      created_by: session.id,
+      parent_admin_id: session.role === "lga_admin" ? session.id : null,
+    })
+    .select("id, email, full_name, lga, ward, polling_unit")
+    .single();
+
+  if (error) {
+    await supabase.auth.admin.deleteUser(authUser.user.id);
+    logError("createPUAdmin", "Insert error:", error);
+    return { error: "Failed to create account. Please try again." };
+  }
+
+  await supabase.from("result_audit_log").insert({
+    action: "INSERT",
+    table_name: "election_admins",
+    record_id: newAdmin.id,
+    new_values: {
+      email,
+      full_name: fullName,
+      lga,
+      ward,
+      polling_unit: pollingUnit,
+      role: "polling_unit_admin",
+    },
+    performed_by: session.id,
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    notes: "PU Admin account created",
+  });
+
+  return { success: true, admin: newAdmin, plainPassword };
+}
+
+// ─────────────────────────────────────────
+// REGENERATE PU ADMIN PASSWORD
+// ─────────────────────────────────────────
+
+export async function regeneratePUAdminPassword(adminId) {
+  const session = await getResultsSession();
+  if (!session || !["state_admin", "lga_admin"].includes(session.role))
+    return { error: "Unauthorised." };
+
+  const supabase = createAdminClient();
+  const hdrs = await headers();
+  const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+  const userAgent = hdrs.get("user-agent") || "unknown";
+
+  // LGA admin: verify target belongs to their LGA
+  if (session.role === "lga_admin") {
+    const { data: target } = await supabase
+      .from("election_admins")
+      .select("lga")
+      .eq("id", adminId)
+      .eq("role", "polling_unit_admin")
+      .single();
+    if (!target || target.lga !== session.lga)
+      return { error: "You can only manage PU Admins in your LGA." };
+  }
+
+  const plainPassword = generateSecurePassword(12);
+  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+
+  await supabase.auth.admin.updateUserById(adminId, {
+    password: plainPassword,
+  });
+
+  const { error } = await supabase
+    .from("election_admins")
+    .update({ password_hash: passwordHash, must_change_password: true })
+    .eq("id", adminId)
+    .eq("role", "polling_unit_admin");
+
+  if (error) return { error: "Failed to regenerate password." };
+
+  await supabase
+    .from("admin_sessions")
+    .update({ is_revoked: true })
+    .eq("admin_id", adminId);
+  await logAuthEvent(
+    supabase,
+    adminId,
+    "PASSWORD_REGENERATE",
+    ipAddress,
+    userAgent,
+    `Regenerated by ${session.role} ${session.id}`,
+  );
+
+  return { success: true, plainPassword };
+}
+
+// ─────────────────────────────────────────
+// TOGGLE PU ADMIN STATUS
+// ─────────────────────────────────────────
+
+export async function togglePUAdminStatus(adminId, activate) {
+  const session = await getResultsSession();
+  if (!session || !["state_admin", "lga_admin"].includes(session.role))
+    return { error: "Unauthorised." };
+
+  const supabase = createAdminClient();
+  const hdrs = await headers();
+  const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+  const userAgent = hdrs.get("user-agent") || "unknown";
+
+  if (session.role === "lga_admin") {
+    const { data: target } = await supabase
+      .from("election_admins")
+      .select("lga")
+      .eq("id", adminId)
+      .eq("role", "polling_unit_admin")
+      .single();
+    if (!target || target.lga !== session.lga)
+      return { error: "You can only manage PU Admins in your LGA." };
+  }
+
+  const { error } = await supabase
+    .from("election_admins")
+    .update({ is_active: activate })
+    .eq("id", adminId)
+    .eq("role", "polling_unit_admin");
+
+  if (error) return { error: "Failed to update account status." };
+
+  await supabase.auth.admin.updateUserById(adminId, {
+    ban_duration: activate ? "none" : "876600h",
+  });
+
+  if (!activate) {
+    await supabase
+      .from("admin_sessions")
+      .update({ is_revoked: true })
+      .eq("admin_id", adminId);
+  }
+
+  await logAuthEvent(
+    supabase,
+    adminId,
+    activate ? "ACCOUNT_ACTIVATED" : "ACCOUNT_DEACTIVATED",
+    ipAddress,
+    userAgent,
+    `By ${session.role} ${session.id}`,
+  );
+
+  return { success: true };
 }

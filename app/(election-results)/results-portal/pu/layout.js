@@ -1,41 +1,40 @@
 /**
  * app/results-portal/pu/layout.jsx
- * Polling Unit Admin shell — fixed sidebar + main content.
+ * Polling Unit Admin shell — lightweight sidebar.
  */
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Image from "next/image";
-import Link from "next/link";
 import { logoutResultsAdmin } from "@/app/actions/election-auth";
 import PUSidebarNav from "./sidebar";
 
 export default async function PULayout({ children }) {
   const hdrs = await headers();
   const role = hdrs.get("x-erms-role");
-  const name = hdrs.get("x-erms-name") || "PU Admin";
+  const adminId = hdrs.get("x-erms-id") || "";
   const lga = hdrs.get("x-erms-lga") || "";
   const ward = hdrs.get("x-erms-ward") || "";
-  const pu = hdrs.get("x-erms-polling-unit") || "";
-  const adminId = hdrs.get("x-erms-id") || "";
+  const pollingUnit = hdrs.get("x-erms-polling-unit") || "";
+  const name = hdrs.get("x-erms-name") || "PU Agent";
 
   if (!role || role !== "polling_unit_admin") redirect("/results-portal/login");
 
-  const initial = name.trim().charAt(0).toUpperCase() || "P";
+  const initial =
+    name.trim().length > 0 ? name.trim().charAt(0).toUpperCase() : "A";
 
   return (
     <div className="h-screen flex overflow-hidden bg-[#F0F4F0]">
       <a
-        href="#pu-main"
+        href="#erms-main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-[#1B5E20] focus:rounded-lg focus:shadow-lg focus:text-sm focus:font-semibold"
       >
         Skip to content
       </a>
 
-      {/* ── Sidebar ── */}
       <aside
         className="w-64 h-screen flex flex-col shrink-0 bg-[#1B5E20] shadow-xl overflow-hidden print:hidden"
-        aria-label="Polling Unit Admin Navigation"
+        aria-label="PU Admin Navigation"
       >
         {/* Branding */}
         <div className="px-6 pt-7 pb-5 shrink-0">
@@ -65,7 +64,7 @@ export default async function PULayout({ children }) {
         {/* User badge */}
         <div className="px-4 py-4 shrink-0">
           <div className="bg-white/10 border border-white/10 rounded-xl px-4 py-3">
-            <div className="flex items-center gap-2.5 mb-2.5">
+            <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-[#4CAF50]/30 flex items-center justify-center text-white text-xs font-bold shrink-0">
                 {initial}
               </div>
@@ -78,48 +77,49 @@ export default async function PULayout({ children }) {
                 </div>
               </div>
             </div>
-            {/* Location badges */}
-            <div className="space-y-1.5">
+            <div className="mt-2 space-y-1">
               <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5">
-                <span className="text-[10px]">🏛️</span>
+                <span className="text-[10px]">📍</span>
                 <span className="text-[#C8E6C9] text-[11px] font-semibold truncate">
                   {lga}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5">
                 <span className="text-[10px]">🏘️</span>
-                <span className="text-[#C8E6C9] text-[11px] font-semibold truncate">
+                <span className="text-[#C8E6C9] text-[11px] font-medium truncate">
                   {ward}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5">
-                <span className="text-[10px]">📍</span>
-                <span className="text-[#A5D6A7] text-[11px] font-bold truncate">
-                  {pu}
-                </span>
-              </div>
+              {pollingUnit && (
+                <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1.5">
+                  <span className="text-[10px]">🗳️</span>
+                  <span className="text-[#C8E6C9] text-[11px] font-medium truncate">
+                    {pollingUnit}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="mx-6 border-t border-white/10 mb-2 shrink-0" />
+
         <div className="px-6 mb-1 shrink-0">
           <span className="text-white/30 text-[9px] font-bold tracking-widest uppercase">
             Navigation
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 scrollbar-none">
           <PUSidebarNav />
         </div>
 
-        {/* Footer */}
         <div className="px-4 py-5 shrink-0">
           <div className="mx-2 border-t border-white/10 mb-4" />
           <form action={logoutResultsAdmin}>
             <button
               type="submit"
-              className="w-full py-2.5 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white/65 hover:text-white border border-white/15 rounded-xl text-[13px] font-semibold cursor-pointer transition-all duration-150"
+              className="w-full py-2.5 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/65 hover:text-white border border-white/15 hover:border-white/25 rounded-xl text-[13px] font-semibold cursor-pointer transition-all duration-150"
             >
               <span className="text-sm">↩</span> Sign Out
             </button>
@@ -130,14 +130,13 @@ export default async function PULayout({ children }) {
         </div>
       </aside>
 
-      {/* ── Main ── */}
       <main
-        id="pu-main"
-        className="flex-1 min-w-0 h-screen overflow-y-auto"
+        id="erms-main"
+        className="flex-1 w-full h-screen overflow-y-auto"
         data-erms-id={adminId}
         data-erms-lga={lga}
         data-erms-ward={ward}
-        data-erms-polling-unit={pu}
+        data-erms-polling-unit={pollingUnit}
         data-erms-name={name}
       >
         {children}

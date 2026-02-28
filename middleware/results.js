@@ -1,9 +1,3 @@
-/**
- * middleware/results.js  (replaces middleware/resultsMiddleware.js)
- * Auth guard for all /results-portal/* routes.
- * Handles 3 roles: state_admin, lga_admin, polling_unit_admin
- */
-
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
@@ -26,7 +20,6 @@ export async function handleResultsRoutes(request) {
   if (!sessionToken) return redirectToLogin(request);
 
   const session = await validateERMSSession(sessionToken, request);
-
   if (!session) {
     const response = redirectToLogin(request);
     response.cookies.delete(SESSION_COOKIE);
@@ -39,21 +32,27 @@ export async function handleResultsRoutes(request) {
 
   // Role-based route guards
   if (pathname.startsWith(STATE_ADMIN_BASE) && session.role !== "state_admin")
-    return redirectToDashboard(session.role, request);
+    return NextResponse.redirect(
+      new URL(dashboardForRole(session.role), request.url),
+    );
 
   if (pathname.startsWith(LGA_ADMIN_BASE) && session.role !== "lga_admin")
-    return redirectToDashboard(session.role, request);
+    return NextResponse.redirect(
+      new URL(dashboardForRole(session.role), request.url),
+    );
 
   if (
     pathname.startsWith(PU_ADMIN_BASE) &&
     session.role !== "polling_unit_admin"
   )
-    return redirectToDashboard(session.role, request);
+    return NextResponse.redirect(
+      new URL(dashboardForRole(session.role), request.url),
+    );
 
   // Root redirect
   if (pathname === "/results-portal" || pathname === "/results-portal/") {
     return NextResponse.redirect(
-      new URL(getDashboard(session.role), request.url),
+      new URL(dashboardForRole(session.role), request.url),
     );
   }
 
@@ -68,9 +67,11 @@ export async function handleResultsRoutes(request) {
   return response;
 }
 
-// ─────────────────────────────────────────
-// SESSION VALIDATION
-// ─────────────────────────────────────────
+function dashboardForRole(role) {
+  if (role === "state_admin") return "/results-portal/admin";
+  if (role === "lga_admin") return "/results-portal/lga";
+  return "/results-portal/pu";
+}
 
 async function validateERMSSession(token, request) {
   try {
@@ -107,21 +108,6 @@ async function validateERMSSession(token, request) {
     console.error("[ERMS Middleware] Session validation error:", err);
     return null;
   }
-}
-
-// ─────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────
-
-function getDashboard(role) {
-  if (role === "state_admin") return "/results-portal/admin";
-  if (role === "lga_admin") return "/results-portal/lga";
-  if (role === "polling_unit_admin") return "/results-portal/pu";
-  return "/results-portal/login";
-}
-
-function redirectToDashboard(role, request) {
-  return NextResponse.redirect(new URL(getDashboard(role), request.url));
 }
 
 function redirectToLogin(request) {
