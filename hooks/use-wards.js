@@ -1,5 +1,5 @@
 /**
- * hooks/use-oyo-south-wards.js
+ * hooks/use-wards.js
  * Ward reference data sourced from INEC — 99 wards across 9 LGAs.
  */
 
