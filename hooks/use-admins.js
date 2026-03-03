@@ -1,0 +1,294 @@
+"use client";
+
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/supabase/client";
+import { toggleAdminStatus, deleteAdminAccount } from "@/app/actions/admins";
+
+const supabase = createClient();
+
+// ─── Keys ─────────────────────────────────────────────────────────────────────
+export const adminKeys = {
+  all: ["admins"],
+  list: (filters) => ["admins", "list", filters],
+  byLGA: (lga) => ["admins", "lga", lga],
+  stats: () => ["admins", "stats"],
+};
+
+// ─── Fetch current actor info ──────────────────────────────────────────────────
+export function useCurrentAdmin() {
+  return useQuery({
+    queryKey: ["current-admin"],
+    queryFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("admins")
+        .select("id, email, full_name, role, lga, is_active")
+        .eq("id", user.id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+// ─── Fetch all admins (scoped) ────────────────────────────────────────────────
+export function useAdmins(filters = {}) {
+  const { data: actor } = useCurrentAdmin();
+
+  return useQuery({
+    queryKey: adminKeys.list({
+      ...filters,
+      actorRole: actor?.role,
+      actorLGA: actor?.lga,
+    }),
+    queryFn: async () => {
+      let query = supabase
+        .from("admins")
+        .select(
+          `
+          id, email, full_name, role, lga, phone,
+          is_active, created_at, last_login, created_by,
+          creator:created_by(full_name, role)
+        `,
+        )
+        .order("lga", { ascending: true })
+        .order("role", { ascending: true })
+        .order("created_at", { ascending: false });
+
+      // Scope based on actor role
+      if (actor?.role === "super_user") {
+        query = query.eq("lga", actor.lga).neq("role", "state_admin");
+      } else if (actor?.role === "administrator") {
+        query = query
+          .eq("lga", actor.lga)
+          .in("role", ["registration", "manager"]);
+      } else if (actor?.role !== "state_admin") {
+        return [];
+      }
+
+      // Additional filters
+      if (filters.lga) query = query.eq("lga", filters.lga);
+      if (filters.role) query = query.eq("role", filters.role);
+      if (filters.is_active !== undefined)
+        query = query.eq("is_active", filters.is_active);
+      if (filters.search) {
+        query = query.or(
+          `full_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`,
+        );
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!actor,
+    staleTime: 30 * 1000,
+  });
+}
+
+// ─── Admin stats per LGA (state_admin only) ───────────────────────────────────
+export function useAdminStats() {
+  const { data: actor } = useCurrentAdmin();
+
+  return useQuery({
+    queryKey: adminKeys.stats(),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("admins")
+        .select("role, lga, is_active");
+      if (error) throw error;
+
+      // Group by LGA
+      const byLGA = {};
+      data.forEach((a) => {
+        if (!a.lga) return;
+        if (!byLGA[a.lga]) {
+          byLGA[a.lga] = { total: 0, active: 0, byRole: {} };
+        }
+        byLGA[a.lga].total += 1;
+        if (a.is_active) byLGA[a.lga].active += 1;
+        byLGA[a.lga].byRole[a.role] = (byLGA[a.lga].byRole[a.role] || 0) + 1;
+      });
+
+      return byLGA;
+    },
+    enabled: actor?.role === "state_admin",
+    staleTime: 60 * 1000,
+  });
+}
+
+// ─── Toggle admin status ──────────────────────────────────────────────────────
+export function useToggleAdminStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ adminId, newStatus }) =>
+      toggleAdminStatus(adminId, newStatus),
+    onMutate: async ({ adminId, newStatus }) => {
+      await queryClient.cancelQueries({ queryKey: adminKeys.all });
+      const snapshot = queryClient.getQueryData(adminKeys.all);
+      queryClient.setQueriesData({ queryKey: adminKeys.all }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((a) =>
+          a.id === adminId ? { ...a, is_active: newStatus } : a,
+        );
+      });
+      return { snapshot };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.snapshot) {
+        queryClient.setQueriesData({ queryKey: adminKeys.all }, ctx.snapshot);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.all });
+    },
+  });
+}
+
+// ─── Delete admin ─────────────────────────────────────────────────────────────
+export function useDeleteAdmin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (adminId) => deleteAdminAccount(adminId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminKeys.all });
+    },
+  });
+}
+
+// ─── Member collation hooks ───────────────────────────────────────────────────
+
+export function useMemberCollationByLGA() {
+  const { data: actor } = useCurrentAdmin();
+
+  return useQuery({
+    queryKey: ["members-collation-lga", actor?.role, actor?.lga],
+    queryFn: async () => {
+      let query = supabase
+        .from("members")
+        .select("lga, ward, gender, created_at");
+
+      if (
+        actor?.role === "super_user" ||
+        actor?.role === "administrator" ||
+        actor?.role === "registration"
+      ) {
+        query = query.eq("lga", actor.lga);
+      }
+      // state_admin gets all
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Aggregate by LGA → ward
+      const byLGA = {};
+      data.forEach((m) => {
+        if (!byLGA[m.lga]) {
+          byLGA[m.lga] = {
+            lga: m.lga,
+            total: 0,
+            male: 0,
+            female: 0,
+            other: 0,
+            byWard: {},
+            monthlyTrend: {},
+          };
+        }
+
+        const l = byLGA[m.lga];
+        l.total += 1;
+        if (m.gender === "male") l.male += 1;
+        else if (m.gender === "female") l.female += 1;
+        else l.other += 1;
+
+        // Ward aggregation
+        if (!l.byWard[m.ward]) {
+          l.byWard[m.ward] = { total: 0, male: 0, female: 0, other: 0 };
+        }
+        const w = l.byWard[m.ward];
+        w.total += 1;
+        if (m.gender === "male") w.male += 1;
+        else if (m.gender === "female") w.female += 1;
+        else w.other += 1;
+
+        // Monthly trend
+        const month = m.created_at?.slice(0, 7); // YYYY-MM
+        if (month) {
+          l.monthlyTrend[month] = (l.monthlyTrend[month] || 0) + 1;
+        }
+      });
+
+      return Object.values(byLGA).sort((a, b) => b.total - a.total);
+    },
+    enabled:
+      !!actor &&
+      ["state_admin", "super_user", "administrator", "registration"].includes(
+        actor.role,
+      ),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useMemberStats() {
+  const { data: actor } = useCurrentAdmin();
+
+  return useQuery({
+    queryKey: ["member-stats", actor?.role, actor?.lga],
+    queryFn: async () => {
+      let query = supabase
+        .from("members")
+        .select("id, lga, gender, created_at", { count: "exact" });
+
+      if (actor?.role !== "state_admin") {
+        query = query.eq("lga", actor.lga);
+      }
+
+      const { data, count, error } = await query;
+      if (error) throw error;
+
+      const now = new Date();
+      const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
+
+      let thisMonthCount = 0;
+      let lastMonthCount = 0;
+      let maleCount = 0;
+      let femaleCount = 0;
+
+      data.forEach((m) => {
+        const month = m.created_at?.slice(0, 7);
+        if (month === thisMonth) thisMonthCount += 1;
+        if (month === lastMonthStr) lastMonthCount += 1;
+        if (m.gender === "male") maleCount += 1;
+        if (m.gender === "female") femaleCount += 1;
+      });
+
+      return {
+        total: count || 0,
+        thisMonth: thisMonthCount,
+        lastMonth: lastMonthCount,
+        male: maleCount,
+        female: femaleCount,
+        other: count - maleCount - femaleCount,
+        growth:
+          lastMonthCount > 0
+            ? Math.round(
+                ((thisMonthCount - lastMonthCount) / lastMonthCount) * 100,
+              )
+            : null,
+      };
+    },
+    enabled: !!actor,
+    staleTime: 30 * 1000,
+  });
+}
