@@ -861,3 +861,45 @@ export async function togglePUAdminStatus(adminId, activate) {
 
   return { success: true };
 }
+export async function updateResultStatus(resultId, status) {
+  const session = await getResultsSession();
+  if (!session || session.role !== "state_admin")
+    return { error: "Unauthorised." };
+
+  const VALID_STATUSES = ["pending", "verified", "disputed"];
+  if (!VALID_STATUSES.includes(status)) return { error: "Invalid status." };
+
+  const supabase = createAdminClient(); // service role — bypasses RLS
+  const hdrs = await headers();
+  const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+  const userAgent = hdrs.get("user-agent") || "unknown";
+
+  // Fetch old value for audit log
+  const { data: old } = await supabase
+    .from("election_results")
+    .select("status")
+    .eq("id", resultId)
+    .single();
+
+  const { error } = await supabase
+    .from("election_results")
+    .update({ status })
+    .eq("id", resultId);
+
+  if (error) return { error: error.message };
+
+  // Audit log
+  await supabase.from("result_audit_log").insert({
+    action: "UPDATE",
+    table_name: "election_results",
+    record_id: resultId,
+    old_values: { status: old?.status },
+    new_values: { status },
+    performed_by: session.id,
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    notes: `Status changed to ${status} by State Admin`,
+  });
+
+  return { success: true };
+}

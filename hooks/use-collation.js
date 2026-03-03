@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/supabase/client";
+import { updateResultStatus } from "@/app/actions/election-auth";
 
 // ─────────────────────────────────────────
 // COLLATED RESULTS — per candidate per LGA
@@ -182,32 +183,25 @@ export function useAllResults(electionId, filters = {}) {
 
 export function useUpdateResultStatus() {
   const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async ({ resultId, status, electionId }) => {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("election_results")
-        .update({ status })
-        .eq("id", resultId);
-      if (error) throw error;
-      return { resultId, status };
+      const res = await updateResultStatus(resultId, status);
+      if (res.error) throw new Error(res.error);
+      return { resultId, status, electionId };
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: ({ electionId }) => {
+      // Invalidate all relevant queries
+      queryClient.invalidateQueries({ queryKey: ["all-results", electionId] });
       queryClient.invalidateQueries({
-        queryKey: ["all-results", vars.electionId],
+        queryKey: ["collated-results", electionId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["collated-results", vars.electionId],
+        queryKey: ["result-totals", electionId],
       });
-      queryClient.invalidateQueries({
-        queryKey: ["result-totals", vars.electionId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["ward-breakdown", vars.electionId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["lga-summary", vars.electionId],
-      });
+    },
+    onError: (err) => {
+      console.error("[useUpdateResultStatus] Failed:", err.message);
     },
   });
 }

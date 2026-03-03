@@ -122,7 +122,7 @@ export async function submitElectionResult(payload) {
     result_image_url,
     result_image_path,
     notes: notes?.trim() || null,
-    status: "pending",
+    status: "verified",
     submitted_by: session.id,
   }));
 

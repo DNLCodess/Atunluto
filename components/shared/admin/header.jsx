@@ -84,7 +84,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((o) => !o)}
-              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 transition"
+              className="flex items-center gap-2 p-1.5 rounded-lg cursor-pointer hover:bg-gray-100 transition"
               aria-label="User menu"
             >
               <div

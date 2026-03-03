@@ -141,7 +141,7 @@ function CreateAdminModal({ actor, onClose, onSuccess }) {
               Create Admin Account
             </h2>
             <p className="text-sm text-text-gray mt-0.5">
-              New account will receive a temporary password
+              New account will receive a password
             </p>
           </div>
           <button
@@ -321,8 +321,7 @@ function PasswordModal({ data, onClose }) {
           <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200 mb-4">
             <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-700">
-              Share this password securely. The admin must change it on first
-              login.
+              Share this password securely and don&apos;t lose this
             </p>
           </div>
 

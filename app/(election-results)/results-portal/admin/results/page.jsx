@@ -229,11 +229,7 @@ export default function ResultsCollationPage() {
                 value: totalSubmissions,
                 color: "text-blue-800",
               },
-              {
-                label: "Pending Review",
-                value: pendingCount,
-                color: "text-orange-700",
-              },
+
               {
                 label: "Disputed",
                 value: disputedCount,
@@ -886,9 +882,8 @@ function SubmissionsList({
           className="px-3 py-2 border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none focus:border-[#1B5E20] cursor-pointer transition-colors duration-150"
         >
           <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
+
           <option value="verified">Verified</option>
-          <option value="disputed">Disputed</option>
         </select>
         <select
           value={lgaFilter}
@@ -988,20 +983,6 @@ function SubmissionsList({
                       </td>
                       <td className="px-3.5 py-3">
                         <div className="flex gap-1.5 flex-wrap">
-                          {r.status !== "verified" && (
-                            <ActionChip
-                              label="✅ Verify"
-                              color="text-[#2E7D32] border-[#2E7D32]"
-                              onClick={() => onUpdateStatus(r.id, "verified")}
-                            />
-                          )}
-                          {r.status !== "disputed" && (
-                            <ActionChip
-                              label="⚠️ Dispute"
-                              color="text-red-700 border-red-700"
-                              onClick={() => onUpdateStatus(r.id, "disputed")}
-                            />
-                          )}
                           {r.result_image_url && (
                             <ActionChip
                               label="📄 Image"

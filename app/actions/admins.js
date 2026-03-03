@@ -121,7 +121,7 @@ export async function createAdminAccount(formData) {
     success: true,
     tempPassword,
     adminId: authData.user.id,
-    message: `Account created for ${full_name}. Share the temporary password securely.`,
+    message: `Account created for ${full_name}. Share the password securely.`,
   };
 }
 

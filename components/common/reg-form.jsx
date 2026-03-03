@@ -5,14 +5,210 @@
 // LGA → Ward → Polling Unit dropdowns. All styling via Tailwind tokens.
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useState as useCanvasState } from "react";
 import {
   OYO_SOUTH_LGAS,
   LGA_NAMES,
   getWardsForLGA,
   getPollingUnitsForWard,
 } from "@/lib/oyo-south-lgas";
+import { createClient } from "@/supabase/client";
 
+function MembershipCardDownload({ member }) {
+  const canvasRef = useRef(null);
+  const [ready, setReady] = useState(false);
+
+  const CONFIG = {
+    name: {
+      x: 21,
+      y: 34.2,
+      maxWidth: 66.2,
+      fontSize: 3,
+      fontWeight: "700",
+      color: "#1f2937",
+      align: "left",
+      maxLines: 1,
+    },
+    gender: {
+      x: 23.5,
+      y: 41.5,
+      maxWidth: 55.6,
+      fontSize: 3,
+      fontWeight: "600",
+      color: "#374151",
+      align: "left",
+      maxLines: 1,
+    },
+    lga: {
+      x: 18.7,
+      y: 48.9,
+      maxWidth: 28,
+      fontSize: 3,
+      fontWeight: "600",
+      color: "#374151",
+      align: "left",
+      maxLines: 1,
+    },
+    ward: {
+      x: 18.9,
+      y: 56,
+      maxWidth: 28.5,
+      fontSize: 3,
+      fontWeight: "600",
+      color: "#374151",
+      align: "left",
+      maxLines: 1,
+    },
+    pollingUnit: {
+      x: 32.9,
+      y: 63.3,
+      maxWidth: 17.5,
+      fontSize: 3.5,
+      fontWeight: "600",
+      color: "#374151",
+      align: "left",
+      maxLines: 1,
+    },
+    cardNumber: {
+      x: 63.4,
+      y: 77.3,
+      maxWidth: 22,
+      fontSize: 4,
+      fontWeight: "800",
+      color: "#065f46",
+      align: "center",
+      maxLines: 1,
+    },
+  };
+
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.textBaseline = "top";
+
+      const w = img.width;
+      const h = img.height;
+
+      function drawText(text, cfg) {
+        const x = (cfg.x / 100) * w;
+        const y = (cfg.y / 100) * h;
+        const maxWidth = (cfg.maxWidth / 100) * w;
+        const fontSize = (cfg.fontSize / 100) * h;
+        const lineHeight = fontSize * 1.2;
+        ctx.fillStyle = cfg.color;
+        ctx.font = `${cfg.fontWeight} ${fontSize}px Raleway, Arial, sans-serif`;
+        ctx.textAlign = cfg.align;
+        const words = text.split(" ");
+        let line = "";
+        let lines = [];
+        for (let i = 0; i < words.length; i++) {
+          const test = line + words[i] + " ";
+          if (ctx.measureText(test).width > maxWidth && i > 0) {
+            lines.push(line.trim());
+            line = words[i] + " ";
+            if (lines.length >= cfg.maxLines) break;
+          } else {
+            line = test;
+          }
+        }
+        if (lines.length < cfg.maxLines && line.trim()) lines.push(line.trim());
+        lines.forEach((t, i) => ctx.fillText(t, x, y + i * lineHeight));
+      }
+
+      drawText(member.full_name.toUpperCase(), CONFIG.name);
+      drawText(
+        (member.gender || "").replace("_", " ").toUpperCase(),
+        CONFIG.gender,
+      );
+      drawText(member.lga.toUpperCase(), CONFIG.lga);
+      drawText(member.ward, CONFIG.ward);
+      drawText(member.polling_unit, CONFIG.pollingUnit);
+      drawText(member.membership_number, CONFIG.cardNumber);
+      setReady(true);
+    };
+    img.src = "/card.png";
+  }, [member]);
+
+  function handleDownload() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.toBlob(
+      (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${member.full_name.replace(/\s+/g, "_")}_membership_card.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      "image/png",
+      1.0,
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      <canvas
+        ref={canvasRef}
+        className="w-full rounded-xl border border-border-gray shadow-sm"
+        style={{ display: ready ? "block" : "none" }}
+      />
+      {!ready && (
+        <div className="h-40 rounded-xl border border-border-gray bg-off-white flex items-center justify-center">
+          <svg
+            className="animate-spin h-6 w-6 text-accent-green"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+              fill="none"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+        </div>
+      )}
+      {ready && (
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary-green hover:bg-secondary-green text-white font-secondary font-semibold text-sm transition-colors shadow-sm"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+            />
+          </svg>
+          Download Membership Card
+        </button>
+      )}
+    </div>
+  );
+}
 export default function MemberRegistrationForm({
   onSuccess,
   onError,
@@ -34,13 +230,16 @@ export default function MemberRegistrationForm({
   });
 
   const [profileImage, setProfileImage] = useState(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null); // "success" | "error" | null
-  const [membershipNumber, setMembershipNumber] = useState(null);
-  const fileInputRef = useRef(null);
+  const [successData, setSuccessData] = useState(null);
 
+  const fileInputRef = useRef(null);
+  const supabase = createClient();
   // ── Derived dropdown options ───────────────────────────────────────────────
   const wardOptions = form.lga ? getWardsForLGA(form.lga) : [];
   const pollingUnitOptions = form.ward
@@ -63,10 +262,9 @@ export default function MemberRegistrationForm({
     setErrors((prev) => ({ ...prev, ward: "", pollingUnit: "" }));
   }
 
-  function handleImageChange(e) {
-    const file = e.target.files[0];
+  async function handleImageChange(e) {
+    const file = e.target.files?.[0];
     if (!file) return;
-
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       setErrors((prev) => ({
         ...prev,
@@ -81,14 +279,36 @@ export default function MemberRegistrationForm({
       }));
       return;
     }
-
     setProfileImage(file);
     setErrors((prev) => ({ ...prev, profileImage: "" }));
-    const reader = new FileReader();
-    reader.onloadend = () => setImagePreview(reader.result);
-    reader.readAsDataURL(file);
+    setImagePreview(URL.createObjectURL(file));
+    setUploadedImageUrl(null);
+    setImageUploading(true);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const res = await fetch(
+        `/api/admin/public-upload-url?lga=${encodeURIComponent(form.lga || "public")}&ext=${ext}`,
+      );
+      if (!res.ok) throw new Error("Failed to get upload URL");
+      const { token, path, publicUrl } = await res.json();
+      const { error: uploadErr } = await supabase.storage
+        .from("members-images")
+        .uploadToSignedUrl(path, token, file, { contentType: file.type });
+      if (uploadErr) throw uploadErr;
+      setUploadedImageUrl(publicUrl);
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        profileImage: "Upload failed. Please try again.",
+      }));
+      setImagePreview(null);
+      setProfileImage(null);
+      setUploadedImageUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } finally {
+      setImageUploading(false);
+    }
   }
-
   function calculateAge(dob) {
     const today = new Date();
     const birth = new Date(dob);
@@ -113,7 +333,13 @@ export default function MemberRegistrationForm({
     } else if (calculateAge(form.dateOfBirth) < 18) {
       e.dateOfBirth = "You must be at least 18 years old to register";
     }
-    if (!profileImage) e.profileImage = "Profile photo is required";
+    if (!profileImage) {
+      e.profileImage = "Profile photo is required";
+    } else if (imageUploading) {
+      e.profileImage = "Please wait for the photo to finish uploading";
+    } else if (!uploadedImageUrl) {
+      e.profileImage = "Photo upload failed. Please re-select your photo.";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -146,9 +372,21 @@ export default function MemberRegistrationForm({
 
       const res = await fetch("/api/register-member", {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: form.fullName,
+          address: form.address,
+          phone: form.phone,
+          whatsapp: form.whatsapp,
+          messenger: form.messenger || "",
+          lga: form.lga,
+          ward: form.ward,
+          polling_unit: form.pollingUnit,
+          date_of_birth: form.dateOfBirth,
+          gender: form.gender,
+          profile_image_url: uploadedImageUrl,
+        }),
       });
-
       const contentType = res.headers.get("content-type");
       if (!contentType?.includes("application/json")) {
         throw new Error("Server returned an invalid response.");
@@ -158,30 +396,8 @@ export default function MemberRegistrationForm({
       if (!res.ok) throw new Error(result.error || "Failed to register member");
 
       setSubmitStatus("success");
-      setMembershipNumber(result.data?.membership_number ?? null);
+      setSuccessData(result.data ?? null);
       if (onSuccess) onSuccess(result.data);
-
-      // Reset after 4 s
-      setTimeout(() => {
-        setForm({
-          fullName: "",
-          address: "",
-          phone: "",
-          whatsapp: "",
-          messenger: "",
-          lga: "",
-          ward: "",
-          pollingUnit: "",
-          dateOfBirth: "",
-          gender: "",
-        });
-        setProfileImage(null);
-        setImagePreview(null);
-        setSubmitStatus(null);
-        setMembershipNumber(null);
-        setErrors({});
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }, 4000);
     } catch (err) {
       console.error("Registration error:", err);
       setSubmitStatus("error");
@@ -520,19 +736,38 @@ export default function MemberRegistrationForm({
               <p className="font-secondary text-sm text-secondary-green mb-3">
                 Welcome to the Atunluto Group family.
               </p>
-              {membershipNumber && (
-                <div className="inline-block px-5 py-3 bg-white rounded-xl border border-light-green">
-                  <p className="text-xs text-text-gray mb-1">
-                    Membership Number
-                  </p>
-                  <p className="font-mono font-bold text-xl text-primary-green">
-                    {membershipNumber}
-                  </p>
-                </div>
-              )}
+
+              {successData && <MembershipCardDownload member={successData} />}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({
+                    fullName: "",
+                    address: "",
+                    phone: "",
+                    whatsapp: "",
+                    messenger: "",
+                    lga: "",
+                    ward: "",
+                    pollingUnit: "",
+                    dateOfBirth: "",
+                    gender: "",
+                  });
+                  setProfileImage(null);
+                  setImagePreview(null);
+                  setUploadedImageUrl(null);
+                  setSubmitStatus(null);
+                  setSuccessData(null);
+                  setErrors({});
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="mt-4 px-6 py-2.5 rounded-xl border-2 border-primary-green text-primary-green font-secondary font-medium text-sm hover:bg-primary-green hover:text-white transition-colors"
+              >
+                Register Another Member
+              </button>
             </motion.div>
           )}
-
           {submitStatus === "error" && errors.submit && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
