@@ -1,3 +1,4 @@
+// hooks/use-elections.js
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -6,14 +7,19 @@ import { fetchElections, fetchCandidates } from "@/app/actions/elections";
 const ELECTIONS_KEY = ["elections"];
 const CANDIDATES_KEY = (electionId) => ["candidates", electionId];
 
-// ─────────────────────────────────────────
-// ELECTIONS
-// ─────────────────────────────────────────
+// ─── Elections ────────────────────────────────────────────────────────────────
 
 export function useElections() {
   return useQuery({
     queryKey: ELECTIONS_KEY,
-    queryFn: () => fetchElections(),
+    queryFn: async () => {
+      const data = await fetchElections();
+      // Server actions return { error } on auth failure rather than throwing —
+      // we need to throw here so React Query puts the hook into error state
+      // instead of returning the error object as successful data.
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
     staleTime: 60_000,
   });
 }
@@ -79,14 +85,16 @@ export function useToggleElectionPublic() {
   });
 }
 
-// ─────────────────────────────────────────
-// CANDIDATES
-// ─────────────────────────────────────────
+// ─── Candidates ───────────────────────────────────────────────────────────────
 
 export function useCandidates(electionId) {
   return useQuery({
     queryKey: CANDIDATES_KEY(electionId),
-    queryFn: () => fetchCandidates(electionId),
+    queryFn: async () => {
+      const data = await fetchCandidates(electionId);
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
     enabled: !!electionId,
     staleTime: 60_000,
   });
@@ -97,7 +105,7 @@ export function useAddCandidate() {
   return useMutation({
     mutationFn: async (payload) => {
       const { addCandidate } = await import("@/app/actions/elections");
-      const result = await addCandidate(payload); // photoPath passes through as-is
+      const result = await addCandidate(payload);
       if (result?.error) throw new Error(result.error);
       return result;
     },
@@ -108,10 +116,11 @@ export function useAddCandidate() {
     },
   });
 }
+
 export function useDeleteCandidate() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ candidateId, electionId }) => {
+    mutationFn: async ({ candidateId }) => {
       const { deleteCandidate } = await import("@/app/actions/elections");
       const result = await deleteCandidate(candidateId);
       if (result?.error) throw new Error(result.error);

@@ -2,19 +2,19 @@
  * lib/hooks/use-election-results.js
  * React Query hooks for result submission and LGA Admin result viewing.
  * All data fetching delegated to server actions — no Supabase client in browser.
+ *
+ * NOTE: Ward and polling unit dropdowns must use useWardsForLGA and
+ * usePollingUnitsForWard from @/hooks/use-pu — NOT useLGAWards (deleted).
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchActiveElections,
   fetchElectionCandidates,
-  fetchLGAWards,
   fetchMyResults,
 } from "@/app/actions/results-fetch";
 
-// ─────────────────────────────────────────
-// ACTIVE ELECTIONS
-// ─────────────────────────────────────────
+// ─── Active Elections ─────────────────────────────────────────────────────────
 
 export function useActiveElections() {
   return useQuery({
@@ -28,9 +28,7 @@ export function useActiveElections() {
   });
 }
 
-// ─────────────────────────────────────────
-// CANDIDATES FOR AN ELECTION
-// ─────────────────────────────────────────
+// ─── Candidates for an Election ───────────────────────────────────────────────
 
 export function useElectionCandidates(electionId) {
   return useQuery({
@@ -45,26 +43,7 @@ export function useElectionCandidates(electionId) {
   });
 }
 
-// ─────────────────────────────────────────
-// LGA WARDS
-// ─────────────────────────────────────────
-
-export function useLGAWards(lga) {
-  return useQuery({
-    queryKey: ["lga-wards", lga],
-    queryFn: async () => {
-      const data = await fetchLGAWards(lga);
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    enabled: !!lga,
-    staleTime: Infinity,
-  });
-}
-
-// ─────────────────────────────────────────
-// MY SUBMISSIONS
-// ─────────────────────────────────────────
+// ─── My Submissions ───────────────────────────────────────────────────────────
 
 export function useMyResults(adminId, electionId) {
   return useQuery({
@@ -79,9 +58,7 @@ export function useMyResults(adminId, electionId) {
   });
 }
 
-// ─────────────────────────────────────────
-// SUBMIT RESULT
-// ─────────────────────────────────────────
+// ─── Submit Result ────────────────────────────────────────────────────────────
 
 export function useSubmitResult() {
   const queryClient = useQueryClient();

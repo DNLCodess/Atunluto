@@ -747,7 +747,7 @@ export default function MembersPage() {
                   <option value="all">All Wards</option>
                   {uniqueWards.map((w) => (
                     <option key={w} value={w}>
-                      Ward {w}
+                      {w}
                     </option>
                   ))}
                 </select>

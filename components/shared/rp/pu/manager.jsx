@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * components/erms/PollingUnitAdminsManager.jsx
- * Shared component used by both State Admin and LGA Admin to manage PU Admins.
+ * components/shared/rp/pu/manager.jsx
+ * Shared component used by both State Admin and LGA Admin to manage PU Agents.
  * Props:
  *   viewerRole: "state_admin" | "lga_admin"
  *   viewerLGA:  string (locks LGA field for lga_admin)
@@ -14,7 +14,12 @@ import {
   usePUAdmins,
   useTogglePUAdminStatus,
 } from "@/hooks/use-election-admins";
-import { useWardsForLGA, OYO_SOUTH_LGAS } from "@/hooks/use-wards";
+import {
+  OYO_SOUTH_LGA_NAMES,
+  useWardsForLGA,
+  usePollingUnitsForWard,
+  prefetchPollingUnits,
+} from "@/hooks/use-pu";
 import {
   createPUAdmin,
   regeneratePUAdminPassword,
@@ -31,6 +36,7 @@ export default function PollingUnitAdminsManager({ viewerRole, viewerLGA }) {
   const [regenLoading, setRegenLoading] = useState(false);
 
   const queryClient = useQueryClient();
+
   const {
     data: admins = [],
     isLoading,
@@ -158,7 +164,7 @@ export default function PollingUnitAdminsManager({ viewerRole, viewerLGA }) {
             className="px-3.5 py-[9px] border-[1.5px] border-[#E0E0E0] rounded-lg text-[13px] bg-white outline-none cursor-pointer"
           >
             <option value="">All LGAs</option>
-            {OYO_SOUTH_LGAS.map((l) => (
+            {OYO_SOUTH_LGA_NAMES.map((l) => (
               <option key={l} value={l}>
                 {l}
               </option>
@@ -310,10 +316,11 @@ export default function PollingUnitAdminsManager({ viewerRole, viewerLGA }) {
   );
 }
 
-// ── PU Agent Row ─────────────────────────────────────────────────────────────
+// ── PU Agent Row ──────────────────────────────────────────────────────────────
 
 function PUAgentRow({ agent, isEven, onToggle, onRegen }) {
   const [toggling, setToggling] = useState(false);
+
   async function handleToggle() {
     setToggling(true);
     await onToggle(!agent.is_active);
@@ -405,19 +412,34 @@ function PUAgentRow({ agent, isEven, onToggle, onRegen }) {
 // ── Create PU Admin Modal ─────────────────────────────────────────────────────
 
 function CreatePUAdminModal({ viewerRole, lockedLGA, onClose, onSuccess }) {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedLGA, setSelectedLGA] = useState(lockedLGA || "");
+  const [selectedWard, setSelectedWard] = useState("");
 
-  const { data: wards = [], isLoading: wardsLoading } =
+  // Wards from DB
+  const { data: wardOptions = [], isLoading: wardsLoading } =
     useWardsForLGA(selectedLGA);
+
+  // Polling units from DB — cascades from selected ward
+  const { data: puOptions = [], isLoading: puLoading } = usePollingUnitsForWard(
+    selectedLGA,
+    selectedWard,
+  );
+
+  // Prefetch PUs for all wards as soon as wards load
+  function handleWardFocus() {
+    wardOptions.forEach((w) =>
+      prefetchPollingUnits(queryClient, selectedLGA, w.ward_name),
+    );
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const formData = new FormData(e.currentTarget);
-    const result = await createPUAdmin(formData);
+    const result = await createPUAdmin(new FormData(e.currentTarget));
     setLoading(false);
     if (result?.error) {
       setError(result.error);
@@ -478,11 +500,14 @@ function CreatePUAdminModal({ viewerRole, lockedLGA, onClose, onSuccess }) {
                 name="lga"
                 required
                 value={selectedLGA}
-                onChange={(e) => setSelectedLGA(e.target.value)}
+                onChange={(e) => {
+                  setSelectedLGA(e.target.value);
+                  setSelectedWard("");
+                }}
                 className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer"
               >
                 <option value="">Select LGA...</option>
-                {OYO_SOUTH_LGAS.map((l) => (
+                {OYO_SOUTH_LGA_NAMES.map((l) => (
                   <option key={l} value={l}>
                     {l}
                   </option>
@@ -491,40 +516,68 @@ function CreatePUAdminModal({ viewerRole, lockedLGA, onClose, onSuccess }) {
             )}
           </div>
 
-          {/* Ward */}
+          {/* Ward — from DB */}
           <div className="mb-5">
             <label className="block text-[13px] font-semibold text-[#212121] mb-2">
               Ward <span className="text-[#C62828]">*</span>
             </label>
-            {wardsLoading ? (
-              <div className="h-11 bg-[#EEEEEE] rounded-lg animate-pulse" />
-            ) : (
-              <select
-                name="ward"
-                required
-                disabled={!selectedLGA}
-                className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer disabled:opacity-50"
-              >
-                <option value="">
-                  {selectedLGA ? "Select ward..." : "Select LGA first"}
-                </option>
-                {wards.map((w) => (
-                  <option key={w.name} value={w.name}>
-                    {w.name}
+            <div className="relative">
+              {wardsLoading ? (
+                <div className="h-11 bg-[#EEEEEE] rounded-lg animate-pulse" />
+              ) : (
+                <select
+                  name="ward"
+                  required
+                  value={selectedWard}
+                  disabled={!selectedLGA}
+                  onFocus={handleWardFocus}
+                  onChange={(e) => setSelectedWard(e.target.value)}
+                  className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {selectedLGA ? "Select ward..." : "Select LGA first"}
                   </option>
-                ))}
-              </select>
-            )}
+                  {wardOptions.map((w) => (
+                    <option key={w.ward_number} value={w.ward_name}>
+                      {w.ward_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
 
-          {/* Polling Unit */}
-          <FormField
-            label="Polling Unit"
-            name="polling_unit"
-            type="text"
-            placeholder="e.g. Ward I N2 - 001"
-            required
-          />
+          {/* Polling Unit — from DB, cascades from ward */}
+          <div className="mb-5">
+            <label className="block text-[13px] font-semibold text-[#212121] mb-2">
+              Polling Unit <span className="text-[#C62828]">*</span>
+            </label>
+            <div className="relative">
+              {puLoading ? (
+                <div className="h-11 bg-[#EEEEEE] rounded-lg animate-pulse" />
+              ) : (
+                <select
+                  name="polling_unit"
+                  required
+                  disabled={!selectedWard}
+                  className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {selectedWard
+                      ? puOptions.length === 0
+                        ? "No polling units found"
+                        : "Select polling unit..."
+                      : "Select ward first"}
+                  </option>
+                  {puOptions.map((pu) => (
+                    <option key={pu.id} value={pu.pu_name}>
+                      {pu.pu_code} — {pu.pu_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
 
           <div className="bg-[#E8F5E9] border border-[#C8E6C9] rounded-lg px-3.5 py-3 mb-6 text-xs text-[#2E7D32] leading-relaxed">
             🔒 A 12-character password will be auto-generated and displayed

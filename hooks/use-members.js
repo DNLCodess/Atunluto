@@ -1,4 +1,4 @@
-// lib/hooks/useMembers.js
+// hooks/use-members.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/supabase/client";
 
@@ -6,7 +6,7 @@ const supabase = createClient();
 
 export const MEMBERS_QUERY_KEY = ["members"];
 
-// Only fetch columns the UI actually needs — avoids transferring heavy fields
+// Only fetch columns the UI actually needs
 const MEMBER_FIELDS = [
   "id",
   "membership_number",
@@ -24,6 +24,8 @@ const MEMBER_FIELDS = [
   "created_at",
 ].join(", ");
 
+// ─── Fetchers ─────────────────────────────────────────────────────────────────
+
 async function fetchMembers() {
   const { data, error } = await supabase
     .from("members")
@@ -34,15 +36,28 @@ async function fetchMembers() {
   return data ?? [];
 }
 
+/**
+ * Add member via the /api/register-member route so that:
+ *  1. The service role key is used (not the anon key).
+ *  2. All server-side validation (LGA/ward/PU existence check) runs.
+ *  3. The membership_number trigger fires correctly.
+ */
 async function addMemberFn(memberData) {
-  const { data, error } = await supabase
-    .from("members")
-    .insert(memberData)
-    .select(MEMBER_FIELDS)
-    .single();
+  const res = await fetch("/api/register-member", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(memberData),
+  });
 
-  if (error) throw error;
-  return data;
+  const contentType = res.headers.get("content-type");
+  if (!contentType?.includes("application/json")) {
+    throw new Error("Server returned an invalid response.");
+  }
+
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || "Failed to add member.");
+
+  return result.data; // { id, full_name, membership_number, lga, ward, polling_unit, gender }
 }
 
 async function updateMemberFn({ id, updates }) {
@@ -63,6 +78,8 @@ async function deleteMemberFn(id) {
   return id;
 }
 
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
 export function useMembers() {
   const queryClient = useQueryClient();
 
@@ -77,18 +94,18 @@ export function useMembers() {
     staleTime: 30 * 1000,
   });
 
-  // Add
+  // ── Add ──────────────────────────────────────────────────────────────────
   const addMutation = useMutation({
     mutationFn: addMemberFn,
-    onSuccess: (newMember) => {
-      queryClient.setQueryData(MEMBERS_QUERY_KEY, (old = []) => [
-        newMember,
-        ...old,
-      ]);
+    onSuccess: () => {
+      // Refetch rather than optimistic insert — the API route triggers
+      // membership_number generation server-side which we can't predict
+      // client-side, so a fresh fetch is the safest approach.
+      queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
     },
   });
 
-  // Update — optimistic with rollback
+  // ── Update — optimistic with rollback ────────────────────────────────────
   const updateMutation = useMutation({
     mutationFn: updateMemberFn,
     onMutate: async ({ id, updates }) => {
@@ -111,7 +128,7 @@ export function useMembers() {
     },
   });
 
-  // Delete — optimistic with rollback
+  // ── Delete — optimistic with rollback ────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: deleteMemberFn,
     onMutate: async (id) => {
@@ -137,9 +154,11 @@ export function useMembers() {
 
     addMember: addMutation.mutate,
     isAdding: addMutation.isPending,
+    addError: addMutation.error?.message ?? null,
 
     updateMember: updateMutation.mutate,
     isUpdating: updateMutation.isPending,
+    updateError: updateMutation.error?.message ?? null,
 
     deleteMember: deleteMutation.mutate,
     isDeleting: deleteMutation.isPending,

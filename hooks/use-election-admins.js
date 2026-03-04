@@ -1,17 +1,19 @@
+// hooks/use-election-admins.js
+// React Query hooks for LGA Admins and PU Agents in the results portal.
+// Ward/PU data lives in hooks/use-pu.js — import from there.
+
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchLGAAdmins } from "@/app/actions/election-admins";
 
-const QUERY_KEY = ["election-admins"];
+const LGA_ADMIN_KEY = ["election-admins"];
 
-// ─────────────────────────────────────────
-// FETCH ALL LGA ADMINS
-// ─────────────────────────────────────────
+// ─── LGA Admins ───────────────────────────────────────────────────────────────
 
 export function useLGAAdmins() {
   return useQuery({
-    queryKey: QUERY_KEY,
+    queryKey: LGA_ADMIN_KEY,
     queryFn: async () => {
       const data = await fetchLGAAdmins();
       if (data?.error) throw new Error(data.error);
@@ -21,10 +23,6 @@ export function useLGAAdmins() {
     retry: 1,
   });
 }
-
-// ─────────────────────────────────────────
-// TOGGLE ACTIVE STATUS (optimistic)
-// ─────────────────────────────────────────
 
 export function useToggleLGAAdminStatus() {
   const queryClient = useQueryClient();
@@ -38,23 +36,21 @@ export function useToggleLGAAdminStatus() {
       return result;
     },
     onMutate: async ({ adminId, activate }) => {
-      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
-      const previous = queryClient.getQueryData(QUERY_KEY);
-      queryClient.setQueryData(QUERY_KEY, (old) =>
+      await queryClient.cancelQueries({ queryKey: LGA_ADMIN_KEY });
+      const previous = queryClient.getQueryData(LGA_ADMIN_KEY);
+      queryClient.setQueryData(LGA_ADMIN_KEY, (old) =>
         old?.map((a) => (a.id === adminId ? { ...a, is_active: activate } : a)),
       );
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
-      queryClient.setQueryData(QUERY_KEY, ctx.previous);
+      queryClient.setQueryData(LGA_ADMIN_KEY, ctx.previous);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: LGA_ADMIN_KEY }),
   });
 }
 
-// ─────────────────────────────────────────
-// FETCH PU ADMINS
-// ─────────────────────────────────────────
+// ─── PU Agents ────────────────────────────────────────────────────────────────
 
 export function usePUAdmins(lgaFilter) {
   return useQuery({
@@ -69,10 +65,6 @@ export function usePUAdmins(lgaFilter) {
     retry: 1,
   });
 }
-
-// ─────────────────────────────────────────
-// TOGGLE PU ADMIN STATUS (optimistic)
-// ─────────────────────────────────────────
 
 export function useTogglePUAdminStatus() {
   const queryClient = useQueryClient();

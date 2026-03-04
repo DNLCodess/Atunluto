@@ -7,12 +7,17 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useActiveElections,
   useElectionCandidates,
-  useLGAWards,
   useSubmitResult,
 } from "@/hooks/use-election-results";
+import {
+  useWardsForLGA,
+  usePollingUnitsForWard,
+  prefetchPollingUnits,
+} from "@/hooks/use-pu";
 
 const STEPS = ["Location", "Votes", "Evidence", "Review"];
 
@@ -30,6 +35,7 @@ const PARTY_COLORS = {
 // ─────────────────────────────────────────
 
 export default function SubmitResultPage() {
+  const queryClient = useQueryClient();
   const [lga, setLga] = useState("");
 
   useEffect(() => {
@@ -41,7 +47,6 @@ export default function SubmitResultPage() {
   const [step, setStep] = useState(0);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState("");
-
   const [electionId, setElectionId] = useState("");
   const [ward, setWard] = useState("");
   const [pollingUnit, setPollingUnit] = useState("");
@@ -60,15 +65,29 @@ export default function SubmitResultPage() {
     useActiveElections();
   const { data: candidates = [], isLoading: loadingCandidates } =
     useElectionCandidates(electionId);
-  const { data: wardsData = [], isLoading: loadingWards } = useLGAWards(lga);
-  const submitResult = useSubmitResult();
 
+  // ── Cascading location data from DB ──────────────────────────────────────
+  const {
+    data: wardOptions = [],
+    isLoading: wardsLoading,
+    isError: wardsError,
+  } = useWardsForLGA(lga);
+
+  const {
+    data: puOptions = [],
+    isLoading: puLoading,
+    isError: puError,
+  } = usePollingUnitsForWard(lga, ward);
+
+  // Prefetch all PUs for this LGA when the ward dropdown is focused
+  function handleWardFocus() {
+    wardOptions.forEach((w) =>
+      prefetchPollingUnits(queryClient, lga, w.ward_name),
+    );
+  }
+
+  const submitResult = useSubmitResult();
   const selectedElection = elections.find((e) => e.id === electionId);
-  const wardOptions = wardsData.map((w) =>
-    typeof w === "string" ? { name: w, polling_units: [] } : w,
-  );
-  const selectedWard = wardOptions.find((w) => w.name === ward);
-  const pollingUnits = selectedWard?.polling_units || [];
 
   const totalVotes = Object.values(candidateVotes).reduce(
     (sum, v) => sum + (Number(v) || 0),
@@ -105,9 +124,9 @@ export default function SubmitResultPage() {
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target.result);
     reader.readAsDataURL(file);
-    // Auto-upload immediately on selection
     uploadImageFile(file);
   }
+
   async function uploadImageFile(file) {
     setImageUploadState("uploading");
     setImageUploadProgress(0);
@@ -149,6 +168,7 @@ export default function SubmitResultPage() {
       setError(err.message || "Image upload failed.");
     }
   }
+
   function handleVoteChange(candidateId, value) {
     setCandidateVotes((prev) => ({
       ...prev,
@@ -172,7 +192,7 @@ export default function SubmitResultPage() {
         accreditedVoters: Number(accreditedVoters),
         registeredVoters: Number(registeredVoters),
         notes,
-        imagePath, // storage path string, not File
+        imagePath,
       });
       setSuccess(result);
     } catch (err) {
@@ -217,17 +237,14 @@ export default function SubmitResultPage() {
           </p>
         </div>
 
-        {/* Stepper */}
         <StepIndicator steps={STEPS} current={step} />
 
-        {/* Error */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mt-5 text-[13px] text-red-800 flex items-center gap-2">
             <span>⚠️</span> {error}
           </div>
         )}
 
-        {/* Form card */}
         <div className="bg-white rounded-2xl border border-[#E0E0E0] p-8 mt-6">
           {step === 0 && (
             <StepLocation
@@ -240,16 +257,20 @@ export default function SubmitResultPage() {
                 setPollingUnit("");
                 setCandidateVotes({});
               }}
-              wardOptions={wardOptions}
-              loadingWards={loadingWards}
               lga={lga}
               ward={ward}
+              wardOptions={wardOptions}
+              wardsLoading={wardsLoading}
+              wardsError={wardsError}
               onWardChange={(w) => {
                 setWard(w);
                 setPollingUnit("");
               }}
-              pollingUnits={pollingUnits}
+              onWardFocus={handleWardFocus}
               pollingUnit={pollingUnit}
+              puOptions={puOptions}
+              puLoading={puLoading}
+              puError={puError}
               onPollingUnitChange={setPollingUnit}
             />
           )}
@@ -361,13 +382,17 @@ function StepLocation({
   loadingElections,
   electionId,
   onElectionChange,
-  wardOptions,
-  loadingWards,
   lga,
   ward,
+  wardOptions,
+  wardsLoading,
+  wardsError,
   onWardChange,
-  pollingUnits,
+  onWardFocus,
   pollingUnit,
+  puOptions,
+  puLoading,
+  puError,
   onPollingUnitChange,
 }) {
   return (
@@ -410,64 +435,79 @@ function StepLocation({
         )}
       </div>
 
-      {/* Ward */}
+      {/* Ward — from DB */}
       <div className="mb-5">
         <Label>
           Ward <Required />
         </Label>
-        {loadingWards ? (
-          <Skeleton />
-        ) : wardOptions.length === 0 && electionId ? (
-          <Input
-            value={ward}
-            onChange={(e) => onWardChange(e.target.value)}
-            placeholder="Enter ward name manually"
-          />
-        ) : (
-          <Select
-            value={ward}
-            onChange={(e) => onWardChange(e.target.value)}
-            disabled={!electionId}
-          >
-            <option value="">Select ward...</option>
-            {wardOptions.map((w) => (
-              <option key={w.name || w} value={w.name || w}>
-                {w.name || w}
+        <div className="relative">
+          {wardsLoading ? (
+            <Skeleton />
+          ) : (
+            <Select
+              value={ward}
+              onChange={(e) => onWardChange(e.target.value)}
+              onFocus={onWardFocus}
+              disabled={!electionId || wardsLoading}
+            >
+              <option value="">
+                {!electionId
+                  ? "Select election first"
+                  : wardsError
+                    ? "Failed to load wards"
+                    : "Select ward..."}
               </option>
-            ))}
-          </Select>
+              {wardOptions.map((w) => (
+                <option key={w.ward_number} value={w.ward_name}>
+                  {w.ward_name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
+        {wardsError && (
+          <p className="text-xs text-amber-600 mt-1">
+            Could not load wards. Check your connection.
+          </p>
         )}
       </div>
 
-      {/* Polling unit */}
+      {/* Polling Unit — from DB, cascades from ward */}
       <div>
         <Label>
           Polling Unit <Required />
         </Label>
-        {pollingUnits.length > 0 ? (
-          <Select
-            value={pollingUnit}
-            onChange={(e) => onPollingUnitChange(e.target.value)}
-            disabled={!ward}
-          >
-            <option value="">Select polling unit...</option>
-            {pollingUnits.map((pu) => (
-              <option key={pu} value={pu}>
-                {pu}
+        <div className="relative">
+          {puLoading ? (
+            <Skeleton />
+          ) : (
+            <Select
+              value={pollingUnit}
+              onChange={(e) => onPollingUnitChange(e.target.value)}
+              disabled={!ward || puLoading}
+            >
+              <option value="">
+                {!ward
+                  ? "Select ward first"
+                  : puError
+                    ? "Failed to load polling units"
+                    : puOptions.length === 0
+                      ? "No polling units found"
+                      : "Select polling unit..."}
               </option>
-            ))}
-          </Select>
-        ) : (
-          <Input
-            value={pollingUnit}
-            onChange={(e) => onPollingUnitChange(e.target.value)}
-            placeholder="Enter polling unit name or code"
-            disabled={!ward}
-          />
+              {puOptions.map((pu) => (
+                <option key={pu.id} value={pu.pu_name}>
+                  {pu.pu_code} — {pu.pu_name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
+        {puError && (
+          <p className="text-xs text-amber-600 mt-1">
+            Could not load polling units. Check your connection.
+          </p>
         )}
-        <p className="text-[11px] text-[#757575] mt-1.5">
-          Enter the exact name or code as shown on the official result sheet.
-        </p>
       </div>
     </div>
   );
@@ -554,7 +594,6 @@ function StepVotes({
             </div>
           ))}
 
-          {/* Total */}
           <div
             className={`flex justify-between items-center px-4 py-3 rounded-xl border mt-2 ${overVote ? "bg-red-50 border-red-200" : "bg-green-50 border-[#C8E6C9]"}`}
           >
@@ -578,7 +617,6 @@ function StepVotes({
         </div>
       )}
 
-      {/* Voter counts */}
       <div className="grid grid-cols-2 gap-4 pt-5 border-t border-[#E0E0E0]">
         <div>
           <Label>
@@ -658,8 +696,6 @@ function StepEvidence({
                 ✕ Remove
               </button>
             </div>
-
-            {/* Upload progress */}
             <div
               className={`mt-2 rounded-xl border px-3.5 py-2.5 text-[12px] flex items-center gap-2.5
               ${
@@ -693,7 +729,6 @@ function StepEvidence({
                 </div>
               </div>
             </div>
-
             {uploadState === "uploading" && (
               <div className="mt-1.5 h-1.5 bg-[#E0E0E0] rounded-full overflow-hidden">
                 <div
@@ -735,7 +770,7 @@ function StepEvidence({
           maxLength={2000}
           rows={5}
           placeholder="Add any relevant observations, discrepancies, or context about this polling unit..."
-          className="w-full px-3.5 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm outline-none resize-y leading-relaxed focus:border-[#1B5E20] focus:ring-4 focus:ring-[#1B5E20]/8 transition-colors duration-150"
+          className="w-full px-3.5 py-3.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm outline-none resize-y leading-relaxed focus:border-[#1B5E20] transition-colors duration-150"
         />
         <p className="text-[11px] text-[#757575] text-right mt-1">
           {notes.length} / 2,000
@@ -744,6 +779,7 @@ function StepEvidence({
     </div>
   );
 }
+
 // ─────────────────────────────────────────
 // STEP 3 — Review
 // ─────────────────────────────────────────
@@ -859,8 +895,7 @@ function SuccessScreen({ result, onAnother }) {
           {result.lga} have been recorded successfully.
         </p>
         <p className="text-[13px] text-[#757575] mb-8">
-          The State Admin will review and verify your submission. File a
-          security report if a correction is needed.
+          The State Admin will review and verify your submission.
         </p>
         <div className="flex gap-3 justify-center">
           <Link
@@ -977,26 +1012,15 @@ function Required() {
   return <span className="text-red-600">*</span>;
 }
 
-function Input({ value, onChange, placeholder, disabled }) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      disabled={disabled}
-      className={`w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm outline-none focus:border-[#1B5E20] transition-colors duration-150 ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-    />
-  );
-}
-
-function Select({ value, onChange, disabled, children }) {
+function Select({ value, onChange, onFocus, disabled, children }) {
   return (
     <select
       value={value}
       onChange={onChange}
+      onFocus={onFocus}
       disabled={disabled}
-      className={`w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150 cursor-pointer ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      className={`w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150
+        ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
     >
       {children}
     </select>

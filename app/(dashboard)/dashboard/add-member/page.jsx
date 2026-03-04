@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   User,
   MapPin,
@@ -15,10 +16,12 @@ import {
 } from "lucide-react";
 import { useCurrentAdmin } from "@/hooks/use-admins";
 import {
-  LGA_NAMES,
-  getWardsForLGA,
-  getPollingUnitsForWard,
-} from "@/lib/oyo-south-lgas";
+  OYO_SOUTH_LGA_NAMES,
+  useWardsForLGA,
+  usePollingUnitsForWard,
+  prefetchAllLGAWards,
+  prefetchPollingUnits,
+} from "@/hooks/use-pu";
 import { createClient } from "@/supabase/client";
 
 const GENDERS = [
@@ -28,6 +31,7 @@ const GENDERS = [
 ];
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
+
 function Field({ label, required, error, children, hint }) {
   return (
     <div>
@@ -59,7 +63,7 @@ function Input({ error, ...props }) {
   );
 }
 
-function Select({ error, children, ...props }) {
+function SelectEl({ error, children, ...props }) {
   return (
     <select
       {...props}
@@ -67,25 +71,34 @@ function Select({ error, children, ...props }) {
         error
           ? "border-red-400 focus:border-red-400 focus:ring-2 focus:ring-red-100"
           : "border-border-gray focus:border-accent-green focus:ring-2 focus:ring-accent-green/20"
-      }`}
+      } disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       {children}
     </select>
   );
 }
 
-// ─── Image Upload — uploads directly to Supabase via presigned URL ────────────
-// ─── Image Upload — uploads directly to Supabase via signed URL ──────────────
+// ─── Spinner ──────────────────────────────────────────────────────────────────
+
+function InlineSpinner() {
+  return (
+    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+      <Loader2 size={14} className="animate-spin text-text-gray" />
+    </div>
+  );
+}
+
+// ─── Image Upload ─────────────────────────────────────────────────────────────
+
 function ImageUpload({ lga, onUploaded, error }) {
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const supabase = createClient(); // your browser supabase client
+  const supabase = createClient();
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.size > 5 * 1024 * 1024) {
       setUploadError("Image must be under 5MB");
       return;
@@ -94,26 +107,20 @@ function ImageUpload({ lga, onUploaded, error }) {
       setUploadError("Only image files are allowed");
       return;
     }
-
     setUploadError(null);
     setUploading(true);
     setPreview(URL.createObjectURL(file));
-
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const res = await fetch(
         `/api/admin/upload-url?lga=${encodeURIComponent(lga || "unknown")}&ext=${ext}`,
       );
       if (!res.ok) throw new Error("Failed to get upload URL");
-
       const { token, path, publicUrl } = await res.json();
-
-      // uploadToSignedUrl(path, token, file, options) — uses token not the full URL
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadErr } = await supabase.storage
         .from("members-images")
         .uploadToSignedUrl(path, token, file, { contentType: file.type });
-
-      if (uploadError) throw uploadError;
+      if (uploadErr) throw uploadErr;
       onUploaded(publicUrl);
     } catch (err) {
       console.error("Image upload error:", err);
@@ -202,6 +209,7 @@ function ImageUpload({ lga, onUploaded, error }) {
 }
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
+
 function Section({ title, icon: Icon, children }) {
   return (
     <div className="bg-white rounded-2xl border border-border-gray overflow-hidden">
@@ -219,8 +227,10 @@ function Section({ title, icon: Icon, children }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function AddMemberPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: actor, isLoading: actorLoading } = useCurrentAdmin();
 
   const [form, setForm] = useState({
@@ -240,14 +250,33 @@ export default function AddMemberPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(null);
 
+  // Pre-warm ward cache for all LGAs on mount (same as public form)
+  useEffect(() => {
+    prefetchAllLGAWards(queryClient);
+  }, [queryClient]);
+
+  // Lock LGA to admin's own LGA for non-state-admin roles
   useEffect(() => {
     if (actor?.lga && actor.role !== "state_admin") {
       setForm((f) => ({ ...f, lga: actor.lga }));
     }
   }, [actor]);
 
-  const wards = getWardsForLGA(form.lga);
-  const pollingUnits = getPollingUnitsForWard(form.lga, form.ward);
+  // ── Cascading dropdown data (from DB) ──────────────────────────────────────
+
+  const {
+    data: wardOptions = [],
+    isLoading: wardsLoading,
+    isError: wardsError,
+  } = useWardsForLGA(form.lga);
+
+  const {
+    data: pollingUnitsData = [],
+    isLoading: puLoading,
+    isError: puError,
+  } = usePollingUnitsForWard(form.lga, form.ward);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   function set(field, value) {
     setForm((f) => {
@@ -262,6 +291,13 @@ export default function AddMemberPage() {
       return next;
     });
     if (errors[field]) setErrors((e) => ({ ...e, [field]: "" }));
+  }
+
+  // Prefetch all PUs for current LGA the moment the Ward dropdown is focused
+  function handleWardFocus() {
+    wardOptions.forEach((w) =>
+      prefetchPollingUnits(queryClient, form.lga, w.ward_name),
+    );
   }
 
   function validate() {
@@ -295,7 +331,7 @@ export default function AddMemberPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/admin/register-member", {
+      const res = await fetch("/api/register-member", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, profile_image_url: profileImageUrl }),
@@ -313,7 +349,12 @@ export default function AddMemberPage() {
     }
   }
 
+  const maxDOB = new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0];
+
   // ─── Loading ───────────────────────────────────────────────────────────────
+
   if (actorLoading) {
     return (
       <div className="min-h-screen bg-off-white flex items-center justify-center">
@@ -323,6 +364,7 @@ export default function AddMemberPage() {
   }
 
   // ─── Permission guard ──────────────────────────────────────────────────────
+
   const canRegister =
     actor &&
     ["state_admin", "super_user", "administrator", "registration"].includes(
@@ -343,6 +385,7 @@ export default function AddMemberPage() {
   }
 
   // ─── Success screen ────────────────────────────────────────────────────────
+
   if (success) {
     return (
       <div className="min-h-screen bg-off-white flex items-center justify-center p-6">
@@ -376,7 +419,7 @@ export default function AddMemberPage() {
                   phone: "",
                   whatsapp: "",
                   messenger: "",
-                  lga: actor?.lga || "",
+                  lga: actor?.role !== "state_admin" ? actor?.lga || "" : "",
                   ward: "",
                   polling_unit: "",
                 });
@@ -399,6 +442,7 @@ export default function AddMemberPage() {
   }
 
   // ─── Form ──────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-off-white">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
@@ -407,8 +451,7 @@ export default function AddMemberPage() {
             onClick={() => router.back()}
             className="flex items-center gap-1.5 text-sm text-text-gray hover:text-text-dark transition-colors mb-4"
           >
-            <ArrowLeft size={15} />
-            Back
+            <ArrowLeft size={15} /> Back
           </button>
           <h1 className="text-2xl font-extrabold font-primary text-text-dark">
             Register New Member
@@ -420,7 +463,7 @@ export default function AddMemberPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Personal Information */}
+          {/* ── Personal Information ── */}
           <Section title="Personal Information" icon={User}>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
@@ -445,17 +488,13 @@ export default function AddMemberPage() {
                   type="date"
                   value={form.date_of_birth}
                   onChange={(e) => set("date_of_birth", e.target.value)}
-                  max={
-                    new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000)
-                      .toISOString()
-                      .split("T")[0]
-                  }
+                  max={maxDOB}
                   error={errors.date_of_birth}
                 />
               </Field>
 
               <Field label="Gender" required error={errors.gender}>
-                <Select
+                <SelectEl
                   value={form.gender}
                   onChange={(e) => set("gender", e.target.value)}
                   error={errors.gender}
@@ -466,7 +505,7 @@ export default function AddMemberPage() {
                       {g.label}
                     </option>
                   ))}
-                </Select>
+                </SelectEl>
               </Field>
 
               <div className="sm:col-span-2">
@@ -479,7 +518,7 @@ export default function AddMemberPage() {
             </div>
           </Section>
 
-          {/* Contact Information */}
+          {/* ── Contact Information ── */}
           <Section title="Contact Information" icon={Phone}>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
@@ -541,9 +580,10 @@ export default function AddMemberPage() {
             </div>
           </Section>
 
-          {/* Location */}
+          {/* ── Location ── */}
           <Section title="Location" icon={MapPin}>
             <div className="grid sm:grid-cols-2 gap-4">
+              {/* LGA — locked for non-state-admin */}
               <div className="sm:col-span-2">
                 <Field
                   label="Local Government Area"
@@ -559,18 +599,18 @@ export default function AddMemberPage() {
                       </span>
                     </div>
                   ) : (
-                    <Select
+                    <SelectEl
                       value={form.lga}
                       onChange={(e) => set("lga", e.target.value)}
                       error={errors.lga}
                     >
                       <option value="">Select LGA</option>
-                      {LGA_NAMES.map((l) => (
+                      {OYO_SOUTH_LGA_NAMES.map((l) => (
                         <option key={l} value={l}>
                           {l}
                         </option>
                       ))}
-                    </Select>
+                    </SelectEl>
                   )}
                   {errors.lga && (
                     <p className="text-xs text-red-600 mt-1">{errors.lga}</p>
@@ -578,40 +618,73 @@ export default function AddMemberPage() {
                 </Field>
               </div>
 
+              {/* Ward — from DB */}
               <Field label="Ward" required error={errors.ward}>
-                <Select
-                  value={form.ward}
-                  onChange={(e) => set("ward", e.target.value)}
-                  disabled={!form.lga}
-                  error={errors.ward}
-                >
-                  <option value="">
-                    {form.lga ? "Select ward" : "Select LGA first"}
-                  </option>
-                  {wards.map((w) => (
-                    <option key={w} value={w}>
-                      {w}
+                <div className="relative">
+                  <SelectEl
+                    value={form.ward}
+                    onChange={(e) => set("ward", e.target.value)}
+                    onFocus={handleWardFocus}
+                    disabled={!form.lga || wardsLoading}
+                    error={errors.ward}
+                  >
+                    <option value="">
+                      {wardsLoading
+                        ? "Loading wards…"
+                        : wardsError
+                          ? "Failed to load"
+                          : !form.lga
+                            ? "Select LGA first"
+                            : "Select ward"}
                     </option>
-                  ))}
-                </Select>
+                    {wardOptions.map((w) => (
+                      <option key={w.ward_number} value={w.ward_name}>
+                        {w.ward_name}
+                      </option>
+                    ))}
+                  </SelectEl>
+                  {wardsLoading && <InlineSpinner />}
+                </div>
+                {wardsError && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Could not load wards. Check your connection.
+                  </p>
+                )}
               </Field>
 
+              {/* Polling Unit — from DB */}
               <Field label="Polling Unit" required error={errors.polling_unit}>
-                <Select
-                  value={form.polling_unit}
-                  onChange={(e) => set("polling_unit", e.target.value)}
-                  disabled={!form.ward}
-                  error={errors.polling_unit}
-                >
-                  <option value="">
-                    {form.ward ? "Select polling unit" : "Select ward first"}
-                  </option>
-                  {pollingUnits.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
+                <div className="relative">
+                  <SelectEl
+                    value={form.polling_unit}
+                    onChange={(e) => set("polling_unit", e.target.value)}
+                    disabled={!form.ward || puLoading}
+                    error={errors.polling_unit}
+                  >
+                    <option value="">
+                      {puLoading
+                        ? "Loading polling units…"
+                        : puError
+                          ? "Failed to load"
+                          : !form.ward
+                            ? "Select ward first"
+                            : pollingUnitsData.length === 0
+                              ? "No polling units found"
+                              : "Select polling unit"}
                     </option>
-                  ))}
-                </Select>
+                    {pollingUnitsData.map((pu) => (
+                      <option key={pu.id} value={pu.pu_name}>
+                        {pu.pu_code} — {pu.pu_name}
+                      </option>
+                    ))}
+                  </SelectEl>
+                  {puLoading && <InlineSpinner />}
+                </div>
+                {puError && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Could not load polling units. Check your connection.
+                  </p>
+                )}
               </Field>
             </div>
           </Section>

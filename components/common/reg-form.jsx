@@ -1,18 +1,24 @@
 "use client";
 
-// components/MemberRegistrationForm.jsx
-// Public-facing registration form — uses OYO_SOUTH_LGAS for cascading
-// LGA → Ward → Polling Unit dropdowns. All styling via Tailwind tokens.
+// components/common/reg-form.jsx
+// Public-facing registration form.
+// ALL geographic data (LGA names, wards, polling units) is sourced from
+// the oyo_south_polling_units / oyo_south_wards tables via React Query hooks.
+// No hardcoded ward/LGA data is imported from static files.
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef, useEffect, useState as useCanvasState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  OYO_SOUTH_LGAS,
-  LGA_NAMES,
-  getWardsForLGA,
-  getPollingUnitsForWard,
-} from "@/lib/oyo-south-lgas";
+  OYO_SOUTH_LGA_NAMES,
+  useWardsForLGA,
+  usePollingUnitsForWard,
+  prefetchAllLGAWards,
+  prefetchPollingUnits,
+} from "@/hooks/use-pu";
 import { createClient } from "@/supabase/client";
+
+// ─── Membership Card ──────────────────────────────────────────────────────────
 
 function MembershipCardDownload({ member }) {
   const canvasRef = useRef(null);
@@ -93,7 +99,6 @@ function MembershipCardDownload({ member }) {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.textBaseline = "top";
-
       const w = img.width;
       const h = img.height;
 
@@ -163,25 +168,7 @@ function MembershipCardDownload({ member }) {
       />
       {!ready && (
         <div className="h-40 rounded-xl border border-border-gray bg-off-white flex items-center justify-center">
-          <svg
-            className="animate-spin h-6 w-6 text-accent-green"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-              fill="none"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
+          <Spinner className="h-6 w-6 text-accent-green" />
         </div>
       )}
       {ready && (
@@ -209,6 +196,61 @@ function MembershipCardDownload({ member }) {
     </div>
   );
 }
+
+// ─── Shared spinner ───────────────────────────────────────────────────────────
+
+function Spinner({ className = "h-4 w-4 text-text-gray" }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  );
+}
+
+// ─── Field Wrapper ────────────────────────────────────────────────────────────
+
+function FieldWrapper({ label, required, hint, error, children }) {
+  return (
+    <div data-error={!!error}>
+      <label className="block font-secondary text-sm font-semibold mb-2 text-text-dark">
+        {label} {required && <span className="text-red-500">*</span>}
+        {hint && <span className="font-normal text-text-gray"> ({hint})</span>}
+      </label>
+      {children}
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="mt-1.5 text-xs text-red-600"
+          >
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Main Form ────────────────────────────────────────────────────────────────
+
 export default function MemberRegistrationForm({
   onSuccess,
   onError,
@@ -216,6 +258,8 @@ export default function MemberRegistrationForm({
   submitButtonText = "Complete Registration",
   className = "",
 }) {
+  const queryClient = useQueryClient();
+
   const [form, setForm] = useState({
     fullName: "",
     address: "",
@@ -235,18 +279,33 @@ export default function MemberRegistrationForm({
   const [imagePreview, setImagePreview] = useState(null);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState(null); // "success" | "error" | null
+  const [submitStatus, setSubmitStatus] = useState(null);
   const [successData, setSuccessData] = useState(null);
 
   const fileInputRef = useRef(null);
   const supabase = createClient();
-  // ── Derived dropdown options ───────────────────────────────────────────────
-  const wardOptions = form.lga ? getWardsForLGA(form.lga) : [];
-  const pollingUnitOptions = form.ward
-    ? getPollingUnitsForWard(form.lga, form.ward)
-    : [];
+
+  // ── Prefetch all LGA ward lists on mount so Ward dropdown is instant ──────
+  useEffect(() => {
+    prefetchAllLGAWards(queryClient);
+  }, [queryClient]);
+
+  // ── Cascading dropdown data (from DB) ─────────────────────────────────────
+
+  const {
+    data: wardOptions = [],
+    isLoading: wardsLoading,
+    isError: wardsError,
+  } = useWardsForLGA(form.lga);
+
+  const {
+    data: pollingUnitsData = [],
+    isLoading: puLoading,
+    isError: puError,
+  } = usePollingUnitsForWard(form.lga, form.ward);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -260,6 +319,17 @@ export default function MemberRegistrationForm({
   function handleWardChange(ward) {
     setForm((prev) => ({ ...prev, ward, pollingUnit: "" }));
     setErrors((prev) => ({ ...prev, ward: "", pollingUnit: "" }));
+  }
+
+  /**
+   * When the user focuses the Ward dropdown, prefetch PUs for every ward in
+   * this LGA in parallel. By the time they pick a ward and tab to the PU
+   * dropdown, the data is already cached.
+   */
+  function handleWardFocus() {
+    wardOptions.forEach((w) =>
+      prefetchPollingUnits(queryClient, form.lga, w.ward_name),
+    );
   }
 
   async function handleImageChange(e) {
@@ -296,7 +366,7 @@ export default function MemberRegistrationForm({
         .uploadToSignedUrl(path, token, file, { contentType: file.type });
       if (uploadErr) throw uploadErr;
       setUploadedImageUrl(publicUrl);
-    } catch (err) {
+    } catch {
       setErrors((prev) => ({
         ...prev,
         profileImage: "Upload failed. Please try again.",
@@ -309,6 +379,7 @@ export default function MemberRegistrationForm({
       setImageUploading(false);
     }
   }
+
   function calculateAge(dob) {
     const today = new Date();
     const birth = new Date(dob);
@@ -347,29 +418,13 @@ export default function MemberRegistrationForm({
   async function handleSubmit(e) {
     e.preventDefault();
     if (!validate()) {
-      // Scroll to first error
       const first = document.querySelector("[data-error='true']");
       first?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-
     setIsSubmitting(true);
     setSubmitStatus(null);
-
     try {
-      const fd = new FormData();
-      fd.append("full_name", form.fullName);
-      fd.append("address", form.address);
-      fd.append("phone", form.phone);
-      fd.append("whatsapp", form.whatsapp);
-      fd.append("messenger", form.messenger || "");
-      fd.append("lga", form.lga);
-      fd.append("ward", form.ward);
-      fd.append("polling_unit", form.pollingUnit);
-      fd.append("date_of_birth", form.dateOfBirth);
-      fd.append("gender", form.gender);
-      if (profileImage) fd.append("profile_image", profileImage);
-
       const res = await fetch("/api/register-member", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -391,10 +446,8 @@ export default function MemberRegistrationForm({
       if (!contentType?.includes("application/json")) {
         throw new Error("Server returned an invalid response.");
       }
-
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to register member");
-
       setSubmitStatus("success");
       setSuccessData(result.data ?? null);
       if (onSuccess) onSuccess(result.data);
@@ -411,17 +464,39 @@ export default function MemberRegistrationForm({
     }
   }
 
-  // ── Max DOB date (must be 18+) ─────────────────────────────────────────────
+  function handleReset() {
+    setForm({
+      fullName: "",
+      address: "",
+      phone: "",
+      whatsapp: "",
+      messenger: "",
+      lga: "",
+      ward: "",
+      pollingUnit: "",
+      dateOfBirth: "",
+      gender: "",
+    });
+    setProfileImage(null);
+    setImagePreview(null);
+    setUploadedImageUrl(null);
+    setSubmitStatus(null);
+    setSuccessData(null);
+    setErrors({});
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   const maxDOB = new Date(new Date().setFullYear(new Date().getFullYear() - 18))
     .toISOString()
     .split("T")[0];
 
-  // ── Shared input class helper ──────────────────────────────────────────────
   function inputCls(field) {
     return `w-full px-4 py-3 rounded-xl border-2 font-secondary text-sm text-text-dark bg-white placeholder-text-light transition-all focus:outline-none focus:border-primary-green ${
       errors[field] ? "border-red-400" : "border-border-gray"
     }`;
   }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className={className}>
@@ -503,9 +578,35 @@ export default function MemberRegistrationForm({
                 </svg>
                 {imagePreview ? "Change Photo" : "Choose Photo"}
               </label>
-              <p className="mt-2 text-xs text-text-gray">
-                JPEG, PNG or WebP · Max 5 MB
-              </p>
+              {imageUploading && (
+                <p className="mt-2 text-xs text-text-gray flex items-center gap-1.5">
+                  <Spinner className="h-3.5 w-3.5 text-accent-green" />
+                  Uploading photo…
+                </p>
+              )}
+              {!imageUploading && uploadedImageUrl && (
+                <p className="mt-2 text-xs text-accent-green flex items-center gap-1.5">
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.5}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  Photo uploaded successfully
+                </p>
+              )}
+              {!imageUploading && !uploadedImageUrl && (
+                <p className="mt-2 text-xs text-text-gray">
+                  JPEG, PNG or WebP · Max 5 MB
+                </p>
+              )}
               {errors.profileImage && (
                 <p className="mt-1 text-xs text-red-600">
                   {errors.profileImage}
@@ -523,7 +624,6 @@ export default function MemberRegistrationForm({
             onChange={(e) => set("fullName", e.target.value)}
             placeholder="e.g., Oluwasegun Theophilus Oladimeji"
             className={inputCls("fullName")}
-            data-error={!!errors.fullName}
           />
         </FieldWrapper>
 
@@ -540,7 +640,6 @@ export default function MemberRegistrationForm({
               max={maxDOB}
               onChange={(e) => set("dateOfBirth", e.target.value)}
               className={inputCls("dateOfBirth")}
-              data-error={!!errors.dateOfBirth}
             />
           </FieldWrapper>
           <FieldWrapper label="Gender" required error={errors.gender}>
@@ -548,7 +647,6 @@ export default function MemberRegistrationForm({
               value={form.gender}
               onChange={(e) => set("gender", e.target.value)}
               className={`${inputCls("gender")} ${!form.gender ? "text-text-light" : ""}`}
-              data-error={!!errors.gender}
             >
               <option value="">— Select gender —</option>
               <option value="male">Male</option>
@@ -570,7 +668,6 @@ export default function MemberRegistrationForm({
             rows={3}
             placeholder="Enter complete residential address"
             className={`${inputCls("address")} resize-none`}
-            data-error={!!errors.address}
           />
         </FieldWrapper>
 
@@ -583,7 +680,6 @@ export default function MemberRegistrationForm({
               onChange={(e) => set("phone", e.target.value)}
               placeholder="080XXXXXXXX"
               className={inputCls("phone")}
-              data-error={!!errors.phone}
             />
           </FieldWrapper>
           <FieldWrapper
@@ -597,7 +693,6 @@ export default function MemberRegistrationForm({
               onChange={(e) => set("whatsapp", e.target.value)}
               placeholder="080XXXXXXXX"
               className={inputCls("whatsapp")}
-              data-error={!!errors.whatsapp}
             />
           </FieldWrapper>
         </div>
@@ -613,7 +708,7 @@ export default function MemberRegistrationForm({
           />
         </FieldWrapper>
 
-        {/* ── LGA + Ward ── */}
+        {/* ── LGA ── */}
         <div className="grid md:grid-cols-2 gap-5">
           <FieldWrapper
             label="Local Government Area"
@@ -624,10 +719,9 @@ export default function MemberRegistrationForm({
               value={form.lga}
               onChange={(e) => handleLGAChange(e.target.value)}
               className={`${inputCls("lga")} ${!form.lga ? "text-text-light" : ""}`}
-              data-error={!!errors.lga}
             >
               <option value="">— Select LGA —</option>
-              {LGA_NAMES.map((name) => (
+              {OYO_SOUTH_LGA_NAMES.map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>
@@ -635,70 +729,109 @@ export default function MemberRegistrationForm({
             </select>
           </FieldWrapper>
 
+          {/* ── Ward — fetched from oyo_south_wards table ── */}
           <FieldWrapper label="Ward" required error={errors.ward}>
-            <select
-              value={form.ward}
-              onChange={(e) => handleWardChange(e.target.value)}
-              disabled={!form.lga}
-              className={`${inputCls("ward")} ${!form.ward ? "text-text-light" : ""} disabled:opacity-50 disabled:cursor-not-allowed`}
-              data-error={!!errors.ward}
-            >
-              <option value="">— Select ward —</option>
-              {wardOptions.map((ward) => (
-                <option key={ward} value={ward}>
-                  {ward}
+            <div className="relative">
+              <select
+                value={form.ward}
+                onChange={(e) => handleWardChange(e.target.value)}
+                onFocus={handleWardFocus}
+                disabled={!form.lga || wardsLoading}
+                className={`${inputCls("ward")} ${!form.ward ? "text-text-light" : ""} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <option value="">
+                  {wardsLoading
+                    ? "Loading wards…"
+                    : wardsError
+                      ? "Failed to load — please retry"
+                      : !form.lga
+                        ? "— Select LGA first —"
+                        : "— Select ward —"}
                 </option>
-              ))}
-            </select>
+                {wardOptions.map((w) => (
+                  <option key={w.ward_number} value={w.ward_name}>
+                    {w.ward_name}
+                  </option>
+                ))}
+              </select>
+              {wardsLoading && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <Spinner />
+                </div>
+              )}
+            </div>
+            {wardsError && (
+              <p className="mt-1.5 text-xs text-amber-600">
+                Could not load wards. Check your connection and try again.
+              </p>
+            )}
           </FieldWrapper>
         </div>
 
-        {/* ── Polling Unit ── */}
+        {/* ── Polling Unit — fetched from oyo_south_polling_units table ── */}
         <FieldWrapper label="Polling Unit" required error={errors.pollingUnit}>
-          <select
-            value={form.pollingUnit}
-            onChange={(e) => set("pollingUnit", e.target.value)}
-            disabled={!form.ward}
-            className={`${inputCls("pollingUnit")} ${!form.pollingUnit ? "text-text-light" : ""} disabled:opacity-50 disabled:cursor-not-allowed`}
-            data-error={!!errors.pollingUnit}
-          >
-            <option value="">— Select polling unit —</option>
-            {pollingUnitOptions.map((pu) => (
-              <option key={pu} value={pu}>
-                {pu}
+          <div className="relative">
+            <select
+              value={form.pollingUnit}
+              onChange={(e) => set("pollingUnit", e.target.value)}
+              disabled={!form.ward || puLoading}
+              className={`${inputCls("pollingUnit")} ${!form.pollingUnit ? "text-text-light" : ""} disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <option value="">
+                {puLoading
+                  ? "Loading polling units…"
+                  : puError
+                    ? "Failed to load — please retry"
+                    : !form.ward
+                      ? "— Select ward first —"
+                      : pollingUnitsData.length === 0
+                        ? "No polling units found for this ward"
+                        : "— Select polling unit —"}
               </option>
-            ))}
-          </select>
+              {pollingUnitsData.map((pu) => (
+                <option key={pu.id} value={pu.pu_name}>
+                  {pu.pu_code} — {pu.pu_name}
+                </option>
+              ))}
+            </select>
+            {puLoading && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                <Spinner />
+              </div>
+            )}
+          </div>
+          {puError && (
+            <p className="mt-1.5 text-xs text-amber-600">
+              Could not load polling units. Check your connection and try again.
+            </p>
+          )}
+          {!puLoading &&
+            !puError &&
+            form.ward &&
+            pollingUnitsData.length === 0 && (
+              <p className="mt-1.5 text-xs text-text-gray">
+                No polling units found for this ward. Contact your
+                administrator.
+              </p>
+            )}
         </FieldWrapper>
 
         {/* ── Submit ── */}
         <div className="pt-2">
           <motion.button
             type="submit"
-            disabled={isSubmitting}
-            whileHover={{ scale: isSubmitting ? 1 : 1.01 }}
-            whileTap={{ scale: isSubmitting ? 1 : 0.99 }}
+            disabled={isSubmitting || imageUploading}
+            whileHover={{ scale: isSubmitting || imageUploading ? 1 : 1.01 }}
+            whileTap={{ scale: isSubmitting || imageUploading ? 1 : 0.99 }}
             className="w-full px-8 py-4 rounded-xl font-secondary font-semibold text-base text-white bg-primary-green hover:bg-secondary-green disabled:bg-text-gray disabled:opacity-70 disabled:cursor-not-allowed shadow-lg transition-colors"
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Submitting…
+                <Spinner className="h-5 w-5" /> Submitting…
+              </span>
+            ) : imageUploading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Spinner className="h-5 w-5" /> Uploading photo…
               </span>
             ) : (
               submitButtonText
@@ -736,38 +869,17 @@ export default function MemberRegistrationForm({
               <p className="font-secondary text-sm text-secondary-green mb-3">
                 Welcome to the Atunluto Group family.
               </p>
-
               {successData && <MembershipCardDownload member={successData} />}
-
               <button
                 type="button"
-                onClick={() => {
-                  setForm({
-                    fullName: "",
-                    address: "",
-                    phone: "",
-                    whatsapp: "",
-                    messenger: "",
-                    lga: "",
-                    ward: "",
-                    pollingUnit: "",
-                    dateOfBirth: "",
-                    gender: "",
-                  });
-                  setProfileImage(null);
-                  setImagePreview(null);
-                  setUploadedImageUrl(null);
-                  setSubmitStatus(null);
-                  setSuccessData(null);
-                  setErrors({});
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
+                onClick={handleReset}
                 className="mt-4 px-6 py-2.5 rounded-xl border-2 border-primary-green text-primary-green font-secondary font-medium text-sm hover:bg-primary-green hover:text-white transition-colors"
               >
                 Register Another Member
               </button>
             </motion.div>
           )}
+
           {submitStatus === "error" && errors.submit && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -800,31 +912,6 @@ export default function MemberRegistrationForm({
           )}
         </AnimatePresence>
       </form>
-    </div>
-  );
-}
-
-// ─── Field wrapper ─────────────────────────────────────────────────────────────
-function FieldWrapper({ label, required, hint, error, children }) {
-  return (
-    <div data-error={!!error}>
-      <label className="block font-secondary text-sm font-semibold mb-2 text-text-dark">
-        {label} {required && <span className="text-red-500">*</span>}
-        {hint && <span className="font-normal text-text-gray">({hint})</span>}
-      </label>
-      {children}
-      <AnimatePresence>
-        {error && (
-          <motion.p
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="mt-1.5 text-xs text-red-600"
-          >
-            {error}
-          </motion.p>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
