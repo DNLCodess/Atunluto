@@ -19,7 +19,7 @@ import {
   OYO_SOUTH_LGA_NAMES,
   useWardsForLGA,
   usePollingUnitsForWard,
-  prefetchAllLGAWards,
+  puKeys,
   prefetchPollingUnits,
 } from "@/hooks/use-pu";
 import { createClient } from "@/supabase/client";
@@ -250,18 +250,20 @@ export default function AddMemberPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(null);
 
-  // Pre-warm ward cache for all LGAs on mount (same as public form)
-  useEffect(() => {
-    prefetchAllLGAWards(queryClient);
-  }, [queryClient]);
+  function prefetchPUsForLGA(lga) {
+    const wards = queryClient.getQueryData(puKeys.wards(lga)) ?? [];
+    wards.forEach(({ ward_name }) =>
+      prefetchPollingUnits(queryClient, lga, ward_name),
+    );
+  }
 
   // Lock LGA to admin's own LGA for non-state-admin roles
   useEffect(() => {
     if (actor?.lga && actor.role !== "state_admin") {
       setForm((f) => ({ ...f, lga: actor.lga }));
+      prefetchPUsForLGA(actor.lga);
     }
   }, [actor]);
-
   // ── Cascading dropdown data (from DB) ──────────────────────────────────────
 
   const {
@@ -294,11 +296,6 @@ export default function AddMemberPage() {
   }
 
   // Prefetch all PUs for current LGA the moment the Ward dropdown is focused
-  function handleWardFocus() {
-    wardOptions.forEach((w) =>
-      prefetchPollingUnits(queryClient, form.lga, w.ward_name),
-    );
-  }
 
   function validate() {
     const e = {};
@@ -601,7 +598,10 @@ export default function AddMemberPage() {
                   ) : (
                     <SelectEl
                       value={form.lga}
-                      onChange={(e) => set("lga", e.target.value)}
+                      onChange={(e) => {
+                        set("lga", e.target.value);
+                        prefetchPUsForLGA(e.target.value);
+                      }}
                       error={errors.lga}
                     >
                       <option value="">Select LGA</option>
@@ -624,7 +624,6 @@ export default function AddMemberPage() {
                   <SelectEl
                     value={form.ward}
                     onChange={(e) => set("ward", e.target.value)}
-                    onFocus={handleWardFocus}
                     disabled={!form.lga || wardsLoading}
                     error={errors.ward}
                   >

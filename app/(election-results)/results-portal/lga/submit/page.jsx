@@ -79,12 +79,13 @@ export default function SubmitResultPage() {
     isError: puError,
   } = usePollingUnitsForWard(lga, ward);
 
-  // Prefetch all PUs for this LGA when the ward dropdown is focused
-  function handleWardFocus() {
-    wardOptions.forEach((w) =>
-      prefetchPollingUnits(queryClient, lga, w.ward_name),
+  // Prefetch all PUs for this LGA as soon as ward list resolves
+  useEffect(() => {
+    if (!lga || wardOptions.length === 0) return;
+    wardOptions.forEach(({ ward_name }) =>
+      prefetchPollingUnits(queryClient, lga, ward_name),
     );
-  }
+  }, [lga, wardOptions]);
 
   const submitResult = useSubmitResult();
   const selectedElection = elections.find((e) => e.id === electionId);
@@ -266,7 +267,6 @@ export default function SubmitResultPage() {
                 setWard(w);
                 setPollingUnit("");
               }}
-              onWardFocus={handleWardFocus}
               pollingUnit={pollingUnit}
               puOptions={puOptions}
               puLoading={puLoading}
@@ -388,7 +388,6 @@ function StepLocation({
   wardsLoading,
   wardsError,
   onWardChange,
-  onWardFocus,
   pollingUnit,
   puOptions,
   puLoading,
@@ -447,7 +446,6 @@ function StepLocation({
             <Select
               value={ward}
               onChange={(e) => onWardChange(e.target.value)}
-              onFocus={onWardFocus}
               disabled={!electionId || wardsLoading}
             >
               <option value="">
@@ -1012,12 +1010,11 @@ function Required() {
   return <span className="text-red-600">*</span>;
 }
 
-function Select({ value, onChange, onFocus, disabled, children }) {
+function Select({ value, onChange, disabled, children }) {
   return (
     <select
       value={value}
       onChange={onChange}
-      onFocus={onFocus}
       disabled={disabled}
       className={`w-full px-3.5 py-2.5 border-[1.5px] border-[#E0E0E0] rounded-xl text-sm bg-white outline-none focus:border-[#1B5E20] transition-colors duration-150
         ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}

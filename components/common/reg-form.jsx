@@ -12,8 +12,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   OYO_SOUTH_LGA_NAMES,
   useWardsForLGA,
+  puKeys,
   usePollingUnitsForWard,
-  prefetchAllLGAWards,
   prefetchPollingUnits,
 } from "@/hooks/use-pu";
 import { createClient } from "@/supabase/client";
@@ -285,11 +285,6 @@ export default function MemberRegistrationForm({
   const fileInputRef = useRef(null);
   const supabase = createClient();
 
-  // ── Prefetch all LGA ward lists on mount so Ward dropdown is instant ──────
-  useEffect(() => {
-    prefetchAllLGAWards(queryClient);
-  }, [queryClient]);
-
   // ── Cascading dropdown data (from DB) ─────────────────────────────────────
 
   const {
@@ -314,8 +309,14 @@ export default function MemberRegistrationForm({
   function handleLGAChange(lga) {
     setForm((prev) => ({ ...prev, lga, ward: "", pollingUnit: "" }));
     setErrors((prev) => ({ ...prev, lga: "", ward: "", pollingUnit: "" }));
-  }
 
+    // Prefetch PUs for every ward in this LGA immediately on LGA selection.
+    // Wards are already cached by LGAPrefetcher — this runs synchronously.
+    const wards = queryClient.getQueryData(puKeys.wards(lga)) ?? [];
+    wards.forEach(({ ward_name }) =>
+      prefetchPollingUnits(queryClient, lga, ward_name),
+    );
+  }
   function handleWardChange(ward) {
     setForm((prev) => ({ ...prev, ward, pollingUnit: "" }));
     setErrors((prev) => ({ ...prev, ward: "", pollingUnit: "" }));
@@ -326,11 +327,6 @@ export default function MemberRegistrationForm({
    * this LGA in parallel. By the time they pick a ward and tab to the PU
    * dropdown, the data is already cached.
    */
-  function handleWardFocus() {
-    wardOptions.forEach((w) =>
-      prefetchPollingUnits(queryClient, form.lga, w.ward_name),
-    );
-  }
 
   async function handleImageChange(e) {
     const file = e.target.files?.[0];
@@ -735,7 +731,6 @@ export default function MemberRegistrationForm({
               <select
                 value={form.ward}
                 onChange={(e) => handleWardChange(e.target.value)}
-                onFocus={handleWardFocus}
                 disabled={!form.lga || wardsLoading}
                 className={`${inputCls("ward")} ${!form.ward ? "text-text-light" : ""} disabled:opacity-50 disabled:cursor-not-allowed`}
               >

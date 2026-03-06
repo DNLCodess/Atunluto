@@ -1,5 +1,5 @@
 // Service Worker for Atunluto Group PWA
-const CACHE_NAME = "atunluto-v4";
+const CACHE_NAME = "atunluto-v5";
 const OFFLINE_URL = "/offline";
 
 // Files to cache on install (REMOVED /admin routes)
@@ -27,7 +27,7 @@ self.addEventListener("install", (event) => {
       } catch (error) {
         console.error("[Service Worker] Failed to cache:", error);
       }
-    })()
+    })(),
   );
 
   self.skipWaiting();
@@ -46,9 +46,9 @@ self.addEventListener("activate", (event) => {
             console.log("[Service Worker] Deleting old cache:", cacheName);
             return caches.delete(cacheName);
           }
-        })
+        }),
       );
-    })()
+    })(),
   );
 
   self.clients.claim();
@@ -85,7 +85,7 @@ self.addEventListener("fetch", (event) => {
         if (cachedResponse) {
           console.log(
             "[Service Worker] Serving from cache:",
-            event.request.url
+            event.request.url,
           );
           return cachedResponse;
         }
@@ -93,7 +93,7 @@ self.addEventListener("fetch", (event) => {
         // If not in cache, fetch from network
         console.log(
           "[Service Worker] Fetching from network:",
-          event.request.url
+          event.request.url,
         );
         const networkResponse = await fetch(event.request);
 
@@ -116,7 +116,7 @@ self.addEventListener("fetch", (event) => {
         const cachedResponse = await cache.match(OFFLINE_URL);
         return cachedResponse || new Response("Offline", { status: 503 });
       }
-    })()
+    })(),
   );
 });
 
@@ -130,7 +130,7 @@ self.addEventListener("message", (event) => {
     event.waitUntil(
       caches.delete(CACHE_NAME).then(() => {
         console.log("[Service Worker] Cache cleared");
-      })
+      }),
     );
   }
 });
@@ -173,7 +173,7 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification("Atunluto Group", options)
+    self.registration.showNotification("Atunluto Group", options),
   );
 });
 

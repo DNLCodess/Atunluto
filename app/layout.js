@@ -2,7 +2,6 @@
 import "./globals.css";
 import { Montserrat, Poppins } from "next/font/google";
 import QueryProvider from "@/components/common/QueryProvider";
-import LGAPrefetcher from "@/components/common/lga-fetcher";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -108,7 +107,7 @@ export default function RootLayout({ children }) {
            * else across the app) will always resolve from cache with zero latency.
            * The component renders nothing visible — it is purely a side-effect runner.
            */}
-          <LGAPrefetcher />
+
           {children}
         </QueryProvider>
       </body>

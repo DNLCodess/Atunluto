@@ -8,7 +8,7 @@
  *   viewerLGA:  string (locks LGA field for lga_admin)
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   usePUAdmins,
@@ -428,12 +428,13 @@ function CreatePUAdminModal({ viewerRole, lockedLGA, onClose, onSuccess }) {
     selectedWard,
   );
 
-  // Prefetch PUs for all wards as soon as wards load
-  function handleWardFocus() {
-    wardOptions.forEach((w) =>
-      prefetchPollingUnits(queryClient, selectedLGA, w.ward_name),
+  // Prefetch all PUs for this LGA as soon as ward list resolves
+  useEffect(() => {
+    if (!selectedLGA || wardOptions.length === 0) return;
+    wardOptions.forEach(({ ward_name }) =>
+      prefetchPollingUnits(queryClient, selectedLGA, ward_name),
     );
-  }
+  }, [selectedLGA, wardOptions]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -530,7 +531,6 @@ function CreatePUAdminModal({ viewerRole, lockedLGA, onClose, onSuccess }) {
                   required
                   value={selectedWard}
                   disabled={!selectedLGA}
-                  onFocus={handleWardFocus}
                   onChange={(e) => setSelectedWard(e.target.value)}
                   className="w-full px-3.5 py-[11px] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm bg-white outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >

@@ -25,13 +25,6 @@ export default async function PULayout({ children }) {
 
   return (
     <div className="h-screen flex overflow-hidden bg-[#F0F4F0]">
-      <a
-        href="#erms-main"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-[#1B5E20] focus:rounded-lg focus:shadow-lg focus:text-sm focus:font-semibold"
-      >
-        Skip to content
-      </a>
-
       <aside
         className="w-64 h-screen flex flex-col shrink-0 bg-[#1B5E20] shadow-xl overflow-hidden print:hidden"
         aria-label="PU Admin Navigation"
@@ -130,17 +123,7 @@ export default async function PULayout({ children }) {
         </div>
       </aside>
 
-      <main
-        id="erms-main"
-        className="flex-1 w-full h-screen overflow-y-auto"
-        data-erms-id={adminId}
-        data-erms-lga={lga}
-        data-erms-ward={ward}
-        data-erms-polling-unit={pollingUnit}
-        data-erms-name={name}
-      >
-        {children}
-      </main>
+      <main className="flex-1 w-full h-screen overflow-y-auto">{children}</main>
     </div>
   );
 }
