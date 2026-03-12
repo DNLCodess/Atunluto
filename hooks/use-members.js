@@ -1,12 +1,8 @@
 // hooks/use-members.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/supabase/client";
-
-const supabase = createClient();
 
 export const MEMBERS_QUERY_KEY = ["members"];
 
-// Only fetch columns the UI actually needs
 const MEMBER_FIELDS = [
   "id",
   "membership_number",
@@ -27,13 +23,9 @@ const MEMBER_FIELDS = [
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
 
 async function fetchMembers() {
-  const { data, error } = await supabase
-    .from("members")
-    .select(MEMBER_FIELDS)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return data ?? [];
+  const res = await fetch("/api/admin/members");
+  if (!res.ok) throw new Error("Failed to fetch members");
+  return res.json();
 }
 
 /**
@@ -57,24 +49,28 @@ async function addMemberFn(memberData) {
   const result = await res.json();
   if (!res.ok) throw new Error(result.error || "Failed to add member.");
 
-  return result.data; // { id, full_name, membership_number, lga, ward, polling_unit, gender }
+  return result.data;
 }
 
 async function updateMemberFn({ id, updates }) {
-  const { data, error } = await supabase
-    .from("members")
-    .update(updates)
-    .eq("id", id)
-    .select(MEMBER_FIELDS)
-    .single();
-
-  if (error) throw error;
-  return data;
+  const res = await fetch("/api/admin/members", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, updates }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || "Failed to update member");
+  return result;
 }
 
 async function deleteMemberFn(id) {
-  const { error } = await supabase.from("members").delete().eq("id", id);
-  if (error) throw error;
+  const res = await fetch("/api/admin/members", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || "Failed to delete member");
   return id;
 }
 
@@ -98,9 +94,6 @@ export function useMembers() {
   const addMutation = useMutation({
     mutationFn: addMemberFn,
     onSuccess: () => {
-      // Refetch rather than optimistic insert — the API route triggers
-      // membership_number generation server-side which we can't predict
-      // client-side, so a fresh fetch is the safest approach.
       queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
     },
   });

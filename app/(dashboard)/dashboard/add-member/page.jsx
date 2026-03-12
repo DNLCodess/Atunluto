@@ -23,6 +23,7 @@ import {
   prefetchPollingUnits,
 } from "@/hooks/use-pu";
 import { createClient } from "@/supabase/client";
+import MembershipCardDownload from "@/components/common/membership-card-download";
 
 const GENDERS = [
   { value: "male", label: "Male" },
@@ -396,7 +397,7 @@ export default function AddMemberPage() {
           <p className="text-text-gray text-sm mb-4">
             {success.full_name} has been successfully registered.
           </p>
-          <div className="inline-block px-4 py-2 bg-light-green/50 rounded-lg mb-6">
+          <div className="inline-block px-4 py-2 bg-light-green/50 rounded-lg mb-4">
             <span className="text-xs font-medium text-text-gray">
               Membership No.
             </span>
@@ -404,7 +405,8 @@ export default function AddMemberPage() {
               {success.membership_number}
             </div>
           </div>
-          <div className="flex gap-3">
+          <MembershipCardDownload member={success} />
+          <div className="flex gap-3 mt-4">
             <button
               onClick={() => {
                 setSuccess(null);
