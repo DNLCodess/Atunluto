@@ -157,7 +157,6 @@ export async function loginResultsAdmin(formData) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    expires: expiresAt,
     path: "/results-portal",
   });
   log("loginResultsAdmin", "Cookie set ✓");
