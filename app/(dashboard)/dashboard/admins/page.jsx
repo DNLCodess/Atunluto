@@ -34,7 +34,7 @@ import {
   useDeleteAdmin,
   useAdminStats,
 } from "@/hooks/use-admins";
-import { createAdminAccount } from "@/app/actions/admins";
+import { createAdminAccount, createStateAdmin } from "@/app/actions/admins";
 import { LGA_NAMES } from "@/lib/oyo-south-lgas";
 import { format } from "date-fns";
 
@@ -563,6 +563,260 @@ function DeleteConfirmModal({ admin, onConfirm, onClose, pending }) {
   );
 }
 
+// ─── State Admins Panel ───────────────────────────────────────────────────────
+function CreateStateAdminModal({ onClose, onSuccess }) {
+  const [form, setForm] = useState({ email: "", full_name: "", phone: "" });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    if (!form.email || !form.full_name) {
+      setError("Email and full name are required.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    const fd = new FormData();
+    Object.entries(form).forEach(([k, v]) => v && fd.append(k, v));
+    const result = await createStateAdmin(fd);
+    setPending(false);
+    if (result.error) setError(result.error);
+    else onSuccess(result);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-border-gray">
+          <div>
+            <h2 className="text-lg font-semibold font-primary text-text-dark">
+              Add State Admin
+            </h2>
+            <p className="text-sm text-text-gray mt-0.5">
+              Full platform access — all LGAs
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-off-white transition-colors"
+          >
+            <X size={18} className="text-text-gray" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-text-dark mb-1.5">
+              Full Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.full_name}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, full_name: e.target.value }))
+              }
+              placeholder="e.g. Adewale Johnson"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-border-gray text-sm text-text-dark placeholder-text-light focus:outline-none focus:border-accent-green focus:ring-2 focus:ring-accent-green/20 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-dark mb-1.5">
+              Email Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, email: e.target.value }))
+              }
+              placeholder="admin@example.com"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-border-gray text-sm text-text-dark placeholder-text-light focus:outline-none focus:border-accent-green focus:ring-2 focus:ring-accent-green/20 transition-all"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-dark mb-1.5">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, phone: e.target.value }))
+              }
+              placeholder="+234 800 000 0000"
+              className="w-full px-3.5 py-2.5 rounded-lg border border-border-gray text-sm text-text-dark placeholder-text-light focus:outline-none focus:border-accent-green focus:ring-2 focus:ring-accent-green/20 transition-all"
+            />
+          </div>
+          <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200">
+            <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-700">
+              State Admins have full access across all 9 LGAs. Create with care.
+            </p>
+          </div>
+          {error && (
+            <div className="flex items-start gap-2 p-3 bg-red-50 rounded-lg border border-red-200">
+              <AlertCircle size={15} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+        </div>
+        <div className="p-6 pt-0 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-border-gray text-sm font-medium text-text-gray hover:bg-off-white transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={pending}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {pending ? "Creating..." : "Create State Admin"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StateAdminsPanel({ actor, onToggle, onDelete, togglePending }) {
+  const { data: stateAdmins = [], isLoading } = useAdmins({ role: "state_admin" });
+  const [showCreate, setShowCreate] = useState(false);
+  const [passwordData, setPasswordData] = useState(null);
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Crown size={16} className="text-amber-600" />
+          <h2 className="text-sm font-semibold text-text-dark">
+            State Admins
+          </h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium">
+            Full platform access
+          </span>
+        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-medium hover:bg-amber-100 transition-colors"
+        >
+          <Plus size={13} />
+          Add State Admin
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+        {isLoading ? (
+          <div className="p-4 space-y-2">
+            {[...Array(2)].map((_, i) => (
+              <div
+                key={i}
+                className="h-14 bg-border-gray rounded-lg animate-pulse"
+              />
+            ))}
+          </div>
+        ) : stateAdmins.length === 0 ? (
+          <div className="px-6 py-8 text-center">
+            <Crown size={28} className="mx-auto text-amber-300 mb-2" />
+            <p className="text-sm text-text-gray">No state admins yet.</p>
+          </div>
+        ) : (
+          stateAdmins.map((admin) => {
+            const isSelf = admin.id === actor?.id;
+            return (
+              <div
+                key={admin.id}
+                className="flex items-center gap-4 px-4 py-3.5 border-b border-amber-100 last:border-0 hover:bg-amber-50/40 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-amber-50 border border-amber-200">
+                  <Crown size={17} className="text-amber-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-text-dark truncate">
+                      {admin.full_name || "—"}
+                    </span>
+                    {isSelf && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-green/20 text-primary-green font-medium">
+                        You
+                      </span>
+                    )}
+                    {!admin.is_active && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                    <span className="text-xs text-text-gray flex items-center gap-1">
+                      <Mail size={11} />
+                      {admin.email}
+                    </span>
+                    {admin.phone && (
+                      <span className="text-xs text-text-gray flex items-center gap-1">
+                        <Phone size={11} />
+                        {admin.phone}
+                      </span>
+                    )}
+                    {admin.last_login && (
+                      <span className="text-xs text-text-gray flex items-center gap-1">
+                        <Clock size={11} />
+                        {format(new Date(admin.last_login), "dd MMM yyyy")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {!isSelf && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => onToggle(admin.id, !admin.is_active)}
+                      disabled={togglePending}
+                      title={admin.is_active ? "Deactivate" : "Activate"}
+                      className="p-2 rounded-lg hover:bg-border-gray transition-colors disabled:opacity-50"
+                    >
+                      {admin.is_active ? (
+                        <ToggleRight size={18} className="text-accent-green" />
+                      ) : (
+                        <ToggleLeft size={18} className="text-text-gray" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => onDelete(admin)}
+                      title="Delete account"
+                      className="p-2 rounded-lg hover:bg-red-50 transition-colors group"
+                    >
+                      <Trash2
+                        size={16}
+                        className="text-text-gray group-hover:text-red-500 transition-colors"
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {showCreate && (
+        <CreateStateAdminModal
+          onClose={() => setShowCreate(false)}
+          onSuccess={(result) => {
+            setShowCreate(false);
+            setPasswordData(result);
+          }}
+        />
+      )}
+      {passwordData && (
+        <PasswordModal
+          data={passwordData}
+          onClose={() => setPasswordData(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminsPage() {
   const { data: actor, isLoading: actorLoading } = useCurrentAdmin();
@@ -664,6 +918,16 @@ export default function AdminsPage() {
             </button>
           )}
         </div>
+
+        {/* State Admins panel — state_admin only */}
+        {actor.role === "state_admin" && (
+          <StateAdminsPanel
+            actor={actor}
+            onToggle={handleToggle}
+            onDelete={setDeleteTarget}
+            togglePending={toggleStatus.isPending}
+          />
+        )}
 
         {/* Role Permission Guide — collapsible */}
         <RoleGuide actor={actor} />

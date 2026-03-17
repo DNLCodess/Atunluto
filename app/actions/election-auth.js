@@ -860,6 +860,176 @@ export async function togglePUAdminStatus(adminId, activate) {
 
   return { success: true };
 }
+// ─────────────────────────────────────────
+// CREATE ELECTION STATE ADMIN
+// ─────────────────────────────────────────
+
+export async function createElectionStateAdmin(formData) {
+  const session = await getResultsSession();
+  if (!session || session.role !== "state_admin")
+    return { error: "Unauthorised." };
+
+  const fullName = formData.get("full_name")?.toString().trim();
+  const email = formData.get("email")?.toString().trim().toLowerCase();
+  const phone = formData.get("phone")?.toString().trim();
+
+  if (!fullName || !email)
+    return { error: "Full name and email are required." };
+
+  const plainPassword = generateSecurePassword(12);
+  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+
+  const supabase = createAdminClient();
+  const hdrs = await headers();
+  const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+  const userAgent = hdrs.get("user-agent") || "unknown";
+
+  const { data: authUser, error: authError } =
+    await supabase.auth.admin.createUser({
+      email,
+      password: plainPassword,
+      email_confirm: true,
+      user_metadata: { full_name: fullName, role: "state_admin" },
+    });
+
+  if (authError) {
+    if (authError.code === "email_exists" || authError.status === 422)
+      return { error: "An account with this email address already exists." };
+    return {
+      error: `Account creation failed: ${authError.message || "Unknown error"}`,
+    };
+  }
+
+  const { data: newAdmin, error } = await supabase
+    .from("election_admins")
+    .insert({
+      id: authUser.user.id,
+      email,
+      full_name: fullName,
+      phone: phone || null,
+      role: "state_admin",
+      password_hash: passwordHash,
+      must_change_password: true,
+      created_by: session.id,
+    })
+    .select("id, email, full_name")
+    .single();
+
+  if (error) {
+    await supabase.auth.admin.deleteUser(authUser.user.id);
+    logError("createElectionStateAdmin", "Insert error:", error);
+    return { error: "Failed to create account. Please try again." };
+  }
+
+  await supabase.from("result_audit_log").insert({
+    action: "INSERT",
+    table_name: "election_admins",
+    record_id: newAdmin.id,
+    new_values: { email, full_name: fullName, role: "state_admin" },
+    performed_by: session.id,
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    notes: "State Admin account created by State Admin",
+  });
+
+  return { success: true, admin: newAdmin, plainPassword };
+}
+
+// ─────────────────────────────────────────
+// TOGGLE ELECTION STATE ADMIN STATUS
+// ─────────────────────────────────────────
+
+export async function toggleElectionStateAdminStatus(adminId, activate) {
+  const session = await getResultsSession();
+  if (!session || session.role !== "state_admin")
+    return { error: "Unauthorised." };
+
+  if (adminId === session.id)
+    return { error: "You cannot change the status of your own account." };
+
+  const supabase = createAdminClient();
+  const hdrs = await headers();
+  const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+  const userAgent = hdrs.get("user-agent") || "unknown";
+
+  const { error } = await supabase
+    .from("election_admins")
+    .update({ is_active: activate })
+    .eq("id", adminId)
+    .eq("role", "state_admin");
+
+  if (error) return { error: "Failed to update account status." };
+
+  await supabase.auth.admin.updateUserById(adminId, {
+    ban_duration: activate ? "none" : "876600h",
+  });
+
+  if (!activate) {
+    await supabase
+      .from("admin_sessions")
+      .update({ is_revoked: true })
+      .eq("admin_id", adminId);
+  }
+
+  const action = activate ? "ACCOUNT_ACTIVATED" : "ACCOUNT_DEACTIVATED";
+  await logAuthEvent(
+    supabase,
+    adminId,
+    action,
+    ipAddress,
+    userAgent,
+    `${activate ? "Activated" : "Deactivated"} by State Admin ${session.id}`,
+  );
+
+  return { success: true };
+}
+
+// ─────────────────────────────────────────
+// REGENERATE ELECTION STATE ADMIN PASSWORD
+// ─────────────────────────────────────────
+
+export async function regenerateElectionStateAdminPassword(adminId) {
+  const session = await getResultsSession();
+  if (!session || session.role !== "state_admin")
+    return { error: "Unauthorised." };
+
+  const plainPassword = generateSecurePassword(12);
+  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
+
+  const supabase = createAdminClient();
+  const hdrs = await headers();
+  const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+  const userAgent = hdrs.get("user-agent") || "unknown";
+
+  await supabase.auth.admin.updateUserById(adminId, {
+    password: plainPassword,
+  });
+
+  const { error } = await supabase
+    .from("election_admins")
+    .update({ password_hash: passwordHash, must_change_password: true })
+    .eq("id", adminId)
+    .eq("role", "state_admin");
+
+  if (error) return { error: "Failed to regenerate password." };
+
+  await supabase
+    .from("admin_sessions")
+    .update({ is_revoked: true })
+    .eq("admin_id", adminId);
+
+  await logAuthEvent(
+    supabase,
+    adminId,
+    "PASSWORD_REGENERATE",
+    ipAddress,
+    userAgent,
+    `Regenerated by State Admin ${session.id}`,
+  );
+
+  return { success: true, plainPassword };
+}
+
 export async function updateResultStatus(resultId, status) {
   const session = await getResultsSession();
   if (!session || session.role !== "state_admin")

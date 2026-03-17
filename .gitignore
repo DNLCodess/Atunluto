@@ -14,7 +14,7 @@
 /coverage
 
 #dev_tools
-/app/dev-tools
+/app/dev-tools*
 
 # next.js
 /.next/

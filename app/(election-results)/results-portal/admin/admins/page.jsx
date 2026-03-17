@@ -10,10 +10,16 @@ import { useState } from "react";
 import {
   useLGAAdmins,
   useToggleLGAAdminStatus,
+  useElectionStateAdmins,
+  useToggleElectionStateAdminStatus,
+  useDeleteElectionAdmin,
 } from "@/hooks/use-election-admins";
 import {
   createLGAAdmin,
   regenerateLGAAdminPassword,
+  createElectionStateAdmin,
+  toggleElectionStateAdminStatus,
+  regenerateElectionStateAdminPassword,
 } from "@/app/actions/election-auth";
 import PollingUnitAdminsManager from "@/components/shared/rp/pu/manager";
 
@@ -30,12 +36,13 @@ const VALID_LGAS = [
 ];
 
 export default function AdminsPage() {
-  const [activeTab, setActiveTab] = useState("lga");
+  const [activeTab, setActiveTab] = useState("state");
 
   return (
     <div className="font-[Poppins,sans-serif] text-[#212121] p-8">
       <div className="flex gap-1 bg-[#F5F5F5] rounded-xl p-1.5 mb-8 w-fit border border-[#E0E0E0]">
         {[
+          { id: "state", label: "👑 State Admins" },
           { id: "lga", label: "🏛️ LGA Admins" },
           { id: "pu", label: "📍 PU Agents" },
         ].map((tab) => (
@@ -48,12 +55,393 @@ export default function AdminsPage() {
           </button>
         ))}
       </div>
-      {activeTab === "lga" ? (
+      {activeTab === "state" ? (
+        <ElectionStateAdminsPanel />
+      ) : activeTab === "lga" ? (
         <LGAAdminsPanel />
       ) : (
         <PollingUnitAdminsManager viewerRole="state_admin" />
       )}
     </div>
+  );
+}
+
+// ─── Election State Admins Panel ──────────────────────────────────────────────
+
+function ElectionStateAdminsPanel() {
+  const { data: admins = [], isLoading, isError } = useElectionStateAdmins();
+  const toggleStatus = useToggleElectionStateAdminStatus();
+  const deleteAdmin = useDeleteElectionAdmin();
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(null);
+  const [showRegenConfirm, setShowRegenConfirm] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [regenLoading, setRegenLoading] = useState(false);
+
+  async function handleRegen() {
+    if (!showRegenConfirm) return;
+    setRegenLoading(true);
+    const result = await regenerateElectionStateAdminPassword(
+      showRegenConfirm.id,
+    );
+    setRegenLoading(false);
+    setShowRegenConfirm(null);
+    if (result?.error) return alert(result.error);
+    setShowPasswordModal({
+      adminName: showRegenConfirm.full_name,
+      password: result.plainPassword,
+      isRegen: true,
+    });
+  }
+
+  function handleCreateSuccess(data) {
+    setShowCreateModal(false);
+    setShowPasswordModal({
+      adminName: data.admin.full_name,
+      password: data.plainPassword,
+      isRegen: false,
+    });
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-start mb-8">
+        <div>
+          <h1 className="font-[Montserrat,sans-serif] text-[26px] font-extrabold text-[#1B5E20] mt-0 mb-1.5">
+            State Admin Accounts
+          </h1>
+          <p className="text-[#757575] text-sm">
+            Manage top-level administrators with full platform access
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="bg-[#1B5E20] text-white border-none rounded-[10px] px-6 py-3 text-sm font-semibold cursor-pointer flex items-center gap-2"
+        >
+          <span className="text-[18px]">+</span> Add State Admin
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-7">
+        {[
+          { label: "Total", value: admins.length, color: "#1B5E20" },
+          {
+            label: "Active",
+            value: admins.filter((a) => a.is_active).length,
+            color: "#2E7D32",
+          },
+          {
+            label: "Pending Setup",
+            value: admins.filter((a) => a.must_change_password).length,
+            color: "#E65100",
+          },
+        ].map(({ label, value, color }) => (
+          <div
+            key={label}
+            className="bg-white rounded-xl px-6 py-5 border border-[#E0E0E0]"
+          >
+            <div
+              className="text-[28px] font-bold font-[Montserrat,sans-serif]"
+              style={{ color }}
+            >
+              {value}
+            </div>
+            <div className="text-xs text-[#757575] font-semibold mt-1">
+              {label}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-xl border border-[#E0E0E0] overflow-hidden">
+        {isLoading ? (
+          <div className="p-6">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="h-[60px] bg-[#F5F5F5] rounded-lg mb-2 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="p-10 text-center text-[#C62828]">
+            Failed to load state admin accounts. Please refresh.
+          </div>
+        ) : admins.length === 0 ? (
+          <div className="px-6 py-[60px] text-center">
+            <div className="text-[40px] mb-4">👑</div>
+            <div className="text-base font-semibold text-[#212121] mb-2">
+              No State Admins yet
+            </div>
+            <div className="text-[13px] text-[#757575]">
+              Click &quot;Add State Admin&quot; to create the first one.
+            </div>
+          </div>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-[#F5F5F5] border-b-2 border-[#E0E0E0]">
+                {[
+                  "Admin",
+                  "Status",
+                  "Last Login",
+                  "Created",
+                  "Actions",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-[11px] font-bold text-[#757575] tracking-[0.8px] uppercase"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {admins.map((admin, i) => (
+                <StateAdminRow
+                  key={admin.id}
+                  admin={admin}
+                  isEven={i % 2 === 0}
+                  onToggle={(activate) =>
+                    toggleStatus.mutate({ adminId: admin.id, activate })
+                  }
+                  onRegen={() =>
+                    setShowRegenConfirm({
+                      id: admin.id,
+                      full_name: admin.full_name,
+                    })
+                  }
+                  onDelete={() => setShowDeleteConfirm(admin)}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showCreateModal && (
+        <CreateElectionStateAdminModal
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={handleCreateSuccess}
+        />
+      )}
+      {showPasswordModal && (
+        <PasswordDisplayModal
+          adminName={showPasswordModal.adminName}
+          password={showPasswordModal.password}
+          isRegen={showPasswordModal.isRegen}
+          onClose={() => setShowPasswordModal(null)}
+        />
+      )}
+      {showRegenConfirm && (
+        <RegenConfirmModal
+          adminName={showRegenConfirm.full_name}
+          loading={regenLoading}
+          onConfirm={handleRegen}
+          onClose={() => setShowRegenConfirm(null)}
+        />
+      )}
+      {showDeleteConfirm && (
+        <DeleteConfirmModal
+          admin={showDeleteConfirm}
+          loading={deleteAdmin.isPending}
+          onConfirm={async () => {
+            await deleteAdmin.mutateAsync(showDeleteConfirm.id);
+            setShowDeleteConfirm(null);
+          }}
+          onClose={() => setShowDeleteConfirm(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function StateAdminRow({ admin, isEven, onToggle, onRegen, onDelete }) {
+  const [toggling, setToggling] = useState(false);
+  async function handleToggle() {
+    setToggling(true);
+    await onToggle(!admin.is_active);
+    setToggling(false);
+  }
+  return (
+    <tr
+      className={`${isEven ? "bg-white" : "bg-[#FAFAFA]"} border-b border-[#E0E0E0]`}
+    >
+      <td className="px-4 py-3.5">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-[38px] h-[38px] rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${admin.is_active ? "bg-[#FFF8E1] text-[#F57F17]" : "bg-[#EEEEEE] text-[#757575]"}`}
+          >
+            {admin.full_name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-[#212121]">
+              {admin.full_name}
+            </div>
+            <div className="text-xs text-[#757575]">{admin.email}</div>
+            {admin.phone && (
+              <div className="text-[11px] text-[#757575]">{admin.phone}</div>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3.5">
+        <div className="flex flex-col gap-1">
+          <span
+            className={`inline-block px-2.5 py-[3px] rounded-full text-[11px] font-bold ${admin.is_active ? "bg-[#E8F5E9] text-[#2E7D32]" : "bg-[#EEEEEE] text-[#757575]"}`}
+          >
+            {admin.is_active ? "● ACTIVE" : "● INACTIVE"}
+          </span>
+          {admin.must_change_password && admin.is_active && (
+            <span className="bg-[#FFF3E0] text-[#E65100] px-2 py-0.5 rounded-full text-[10px] font-semibold inline-block">
+              PENDING SETUP
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3.5 text-[13px] text-[#757575]">
+        {admin.last_login ? (
+          formatDate(admin.last_login)
+        ) : (
+          <span className="text-[#BDBDBD] italic">Never</span>
+        )}
+      </td>
+      <td className="px-4 py-3.5 text-[13px] text-[#757575]">
+        {formatDate(admin.created_at)}
+      </td>
+      <td className="px-4 py-3.5">
+        <div className="flex gap-2">
+          <button
+            onClick={onRegen}
+            className="px-3 py-1.5 bg-transparent border-[1.5px] border-[#1B5E20] text-[#1B5E20] rounded-md text-xs font-semibold cursor-pointer"
+          >
+            🔑 Regen
+          </button>
+          <button
+            onClick={handleToggle}
+            disabled={toggling}
+            className={`px-3 py-1.5 bg-transparent border-[1.5px] rounded-md text-xs font-semibold ${admin.is_active ? "border-[#C62828] text-[#C62828]" : "border-[#2E7D32] text-[#2E7D32]"} ${toggling ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+          >
+            {toggling
+              ? "..."
+              : admin.is_active
+                ? "⛔ Deactivate"
+                : "✅ Activate"}
+          </button>
+          <button
+            onClick={onDelete}
+            className="px-3 py-1.5 bg-transparent border-[1.5px] border-[#C62828] text-[#C62828] rounded-md text-xs font-semibold cursor-pointer"
+          >
+            🗑️ Delete
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function CreateElectionStateAdminModal({ onClose, onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const result = await createElectionStateAdmin(new FormData(e.currentTarget));
+    setLoading(false);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    onSuccess(result);
+  }
+  return (
+    <Overlay onClose={onClose}>
+      <ModalCard
+        title="Add State Admin"
+        subtitle="Full platform access — all LGAs. A password will be auto-generated."
+        onClose={onClose}
+        width="480px"
+      >
+        {error && (
+          <div className="bg-[#FFEBEE] border border-[#FFCDD2] rounded-lg px-3.5 py-3 mb-5 text-[13px] text-[#C62828]">
+            ⚠️ {error}
+          </div>
+        )}
+        <div className="bg-[#FFF3E0] border border-[#FFE082] rounded-lg px-3.5 py-3 mb-5 text-[13px] text-[#5D4037] leading-relaxed">
+          ⚠️ <strong>Caution:</strong> State Admins have unrestricted access to
+          all election data and admin accounts.
+        </div>
+        <form onSubmit={handleSubmit}>
+          <FormField
+            label="Full Name"
+            name="full_name"
+            type="text"
+            placeholder="e.g. Adebayo Okafor"
+            required
+          />
+          <FormField
+            label="Email Address"
+            name="email"
+            type="email"
+            placeholder="admin@example.com"
+            required
+          />
+          <FormField
+            label="Phone Number"
+            name="phone"
+            type="tel"
+            placeholder="+234 800 000 0000"
+          />
+          <div className="flex gap-3 justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-[11px] bg-white text-[#212121] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm font-medium cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className={`px-6 py-[11px] text-white border-none rounded-lg text-sm font-semibold ${loading ? "bg-[#A5D6A7] cursor-not-allowed" : "bg-[#1B5E20] cursor-pointer"}`}
+            >
+              {loading ? "Creating..." : "Create Account"}
+            </button>
+          </div>
+        </form>
+      </ModalCard>
+    </Overlay>
+  );
+}
+
+function DeleteConfirmModal({ admin, loading, onConfirm, onClose }) {
+  return (
+    <Overlay onClose={onClose}>
+      <ModalCard title="Delete Account?" width="420px" onClose={onClose}>
+        <div className="bg-[#FFEBEE] border border-[#FFCDD2] rounded-lg p-3.5 mb-6 text-[13px] text-[#C62828] leading-[1.7]">
+          Are you sure you want to permanently delete the account for{" "}
+          <strong>{admin.full_name}</strong>? This will revoke all active
+          sessions and cannot be undone.
+        </div>
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 bg-white text-[#212121] border-[1.5px] border-[#E0E0E0] rounded-lg text-sm font-medium cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className={`px-6 py-2.5 bg-[#C62828] text-white border-none rounded-lg text-sm font-semibold ${loading ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+          >
+            {loading ? "Deleting..." : "Yes, Delete"}
+          </button>
+        </div>
+      </ModalCard>
+    </Overlay>
   );
 }
 

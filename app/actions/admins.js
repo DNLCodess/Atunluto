@@ -227,6 +227,63 @@ export async function getAdminsForActor() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// createStateAdmin
+// Only an existing state_admin can create another state_admin account.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function createStateAdmin(formData) {
+  const actor = await getCurrentAdmin();
+  if (!actor || !actor.is_active || actor.role !== "state_admin")
+    return { error: "Unauthorised." };
+
+  const email = formData.get("email")?.toString().trim().toLowerCase();
+  const full_name = formData.get("full_name")?.toString().trim();
+  const phone = formData.get("phone")?.toString().trim() || null;
+
+  if (!email || !full_name)
+    return { error: "Email and full name are required." };
+
+  const tempPassword = generateTempPassword();
+  const service = makeServiceClient();
+
+  const { data: authData, error: authError } =
+    await service.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name, role: "state_admin" },
+    });
+
+  if (authError) {
+    if (authError.message?.includes("already registered"))
+      return { error: "An account with this email already exists." };
+    return { error: "Failed to create auth account. Please try again." };
+  }
+
+  const { error: dbError } = await service.from("admins").insert({
+    id: authData.user.id,
+    email,
+    full_name,
+    phone,
+    role: "state_admin",
+    lga: null,
+    created_by: actor.id,
+    is_active: true,
+  });
+
+  if (dbError) {
+    await service.auth.admin.deleteUser(authData.user.id);
+    return { error: "Failed to save account record. Please try again." };
+  }
+
+  revalidatePath("/dashboard/admins");
+  return {
+    success: true,
+    tempPassword,
+    message: `State Admin account created for ${full_name}.`,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // generateTempPassword — guaranteed uppercase + lowercase + digit + symbol
 // ─────────────────────────────────────────────────────────────────────────────
 function generateTempPassword(length = 12) {
