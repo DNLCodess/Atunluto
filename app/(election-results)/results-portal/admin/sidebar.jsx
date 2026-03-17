@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   },
   {
     href: "/results-portal/admin/admins",
-    label: "LGA Admins",
+    label: "Admins",
     icon: "👥",
     exact: false,
   },
