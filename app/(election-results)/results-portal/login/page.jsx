@@ -110,6 +110,10 @@ function LoginForm() {
         }, 5000);
       }
     } catch (err) {
+      // Next.js redirect() throws a NEXT_REDIRECT error to trigger navigation —
+      // it is not a real failure, so silently let the navigation proceed.
+      if (err?.digest?.startsWith("NEXT_REDIRECT")) return;
+
       if (submitTimeoutRef.current) {
         clearTimeout(submitTimeoutRef.current);
         submitTimeoutRef.current = null;
