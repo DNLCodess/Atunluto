@@ -106,6 +106,11 @@ export async function loginResultsAdmin(formData) {
     };
   }
 
+  if (!admin.password_hash) {
+    logError("loginResultsAdmin", "No password hash on record for admin:", admin.id);
+    return { error: "Account setup is incomplete. Contact the system administrator." };
+  }
+
   const passwordMatch = await bcrypt.compare(password, admin.password_hash);
   log("loginResultsAdmin", "Password match result:", passwordMatch);
 
