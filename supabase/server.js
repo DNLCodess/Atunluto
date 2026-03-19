@@ -14,9 +14,16 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value }) =>
-              cookieStore.set(name, value)
-            );
+            cookiesToSet.forEach(({ name, value, options = {} }) => {
+              // Strip maxAge/expires so all auth cookies are session cookies
+              // (cleared when the browser closes, not on soft refresh).
+              const { maxAge, expires, ...rest } = options;
+              const isRemoval = maxAge === 0;
+              cookieStore.set(name, value, {
+                ...rest,
+                ...(isRemoval ? { maxAge: 0 } : {}),
+              });
+            });
           } catch {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing

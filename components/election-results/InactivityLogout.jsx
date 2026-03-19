@@ -2,16 +2,14 @@
 
 /**
  * ERMSInactivityLogout — Election Results Portal
- * - Logs out after 15 minutes of inactivity
+ * Logs out after 15 minutes of inactivity.
  *
- * Note: sendBeacon on pagehide was removed — pagehide fires on page refresh
- * as well as tab close, making it impossible to distinguish the two without
- * a more complex architecture. The 15-minute inactivity timer is the primary
- * security mechanism.
+ * On timeout: navigates to /results-portal/logout (GET) which revokes the
+ * session server-side and redirects to /results-portal/login — no async
+ * fetch to wait for, no blank page, no race condition.
  */
 
 import { useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 
 const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
@@ -25,20 +23,14 @@ const ACTIVITY_EVENTS = [
 ];
 
 export default function ERMSInactivityLogout() {
-  const router = useRouter();
   const timerRef = useRef(null);
   const isLoggingOut = useRef(false);
 
-  const performLogout = useCallback(async () => {
+  const performLogout = useCallback(() => {
     if (isLoggingOut.current) return;
     isLoggingOut.current = true;
-    try {
-      await fetch("/results-portal/logout", { method: "POST" });
-    } catch {
-      // best effort
-    }
-    router.replace("/results-portal/login");
-  }, [router]);
+    window.location.replace("/results-portal/logout");
+  }, []);
 
   const resetTimer = useCallback(() => {
     clearTimeout(timerRef.current);

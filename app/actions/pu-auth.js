@@ -8,12 +8,9 @@
  */
 
 import { headers } from "next/headers";
-import bcrypt from "bcryptjs";
 import { createAdminClient } from "@/supabase/admin";
 import { getResultsSession } from "@/app/actions/election-auth";
 import { generateSecurePassword } from "@/utils/password-generator";
-
-const BCRYPT_ROUNDS = 12;
 
 function log(fn, msg, data) {
   data !== undefined
@@ -104,7 +101,6 @@ export async function createPUAdmin(formData) {
   if (!VALID_LGAS.includes(lga)) return { error: "Invalid LGA selected." };
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
   const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
@@ -143,7 +139,6 @@ export async function createPUAdmin(formData) {
       ward,
       polling_unit: pollingUnit,
       role: "polling_unit_admin",
-      password_hash: passwordHash,
       must_change_password: true,
       created_by: session.id,
       parent_admin_id: session.role === "lga_admin" ? session.id : null,
@@ -205,31 +200,26 @@ export async function regeneratePUAdminPassword(adminId) {
   }
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
 
   const { error: authError } = await supabase.auth.admin.updateUserById(
     adminId,
     { password: plainPassword },
   );
   if (authError)
-    logError(
-      "regeneratePUAdminPassword",
-      "Auth update failed (non-fatal):",
-      authError,
-    );
+    logError("regeneratePUAdminPassword", "Auth update failed (non-fatal):", authError);
 
   const { error } = await supabase
     .from("election_admins")
-    .update({ password_hash: passwordHash, must_change_password: true })
+    .update({ must_change_password: true })
     .eq("id", adminId)
     .eq("role", "polling_unit_admin");
 
   if (error) return { error: "Failed to regenerate password." };
 
-  await supabase
-    .from("admin_sessions")
-    .update({ is_revoked: true })
-    .eq("admin_id", adminId);
+  // Revoke all active sessions for this user
+  const { error: signOutError } = await supabase.auth.admin.signOut(adminId);
+  if (signOutError)
+    logError("regeneratePUAdminPassword", "Session revoke failed (non-fatal):", signOutError);
 
   await supabase.from("result_audit_log").insert({
     action: "UPDATE",
@@ -280,18 +270,16 @@ export async function togglePUAdminStatus(adminId, activate) {
 
   const { error: authError } = await supabase.auth.admin.updateUserById(
     adminId,
-    {
-      ban_duration: activate ? "none" : "876600h",
-    },
+    { ban_duration: activate ? "none" : "876600h" },
   );
   if (authError)
     logError("togglePUAdminStatus", "Auth ban failed (non-fatal):", authError);
 
+  // On deactivation — force sign out all active sessions
   if (!activate) {
-    await supabase
-      .from("admin_sessions")
-      .update({ is_revoked: true })
-      .eq("admin_id", adminId);
+    const { error: signOutError } = await supabase.auth.admin.signOut(adminId);
+    if (signOutError)
+      logError("togglePUAdminStatus", "Session revoke failed (non-fatal):", signOutError);
   }
 
   await supabase.from("result_audit_log").insert({

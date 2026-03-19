@@ -1,35 +1,32 @@
-import { cookies } from "next/headers";
-import { createAdminClient } from "@/supabase/admin";
+import { createErmsClient } from "@/supabase/erms-server";
 import { NextResponse } from "next/server";
 
-const SESSION_COOKIE = "erms_session";
+const LOGIN_URL = "/results-portal/login";
 
-/**
- * POST /results-portal/logout
- * Called by sendBeacon on tab/window close, and by the idle-timeout handler.
- * Must live under /results-portal/ so the browser includes the erms_session
- * cookie (which is scoped to path: "/results-portal").
- */
-export async function POST() {
+async function performSignOut() {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE)?.value;
-
-    if (token) {
-      const supabase = createAdminClient();
-      await supabase
-        .from("admin_sessions")
-        .update({ is_revoked: true })
-        .eq("session_token", token);
-    }
+    const supabase = await createErmsClient();
+    await supabase.auth.signOut();
   } catch {
     // best effort
   }
+}
 
-  const response = NextResponse.json({ ok: true });
-  response.cookies.delete({
-    name: SESSION_COOKIE,
-    path: "/results-portal",
-  });
-  return response;
+/**
+ * GET /results-portal/logout
+ * Used by the inactivity timer — browser navigates here directly.
+ * Signs out server-side (clears erms_sb-* cookies), redirects to login.
+ */
+export async function GET(request) {
+  await performSignOut();
+  return NextResponse.redirect(new URL(LOGIN_URL, request.url));
+}
+
+/**
+ * POST /results-portal/logout
+ * Programmatic logout endpoint for fetch-based callers.
+ */
+export async function POST() {
+  await performSignOut();
+  return NextResponse.json({ ok: true });
 }

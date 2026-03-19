@@ -18,9 +18,16 @@ export async function updateSession(request) {
             request.cookies.set(name, value),
           );
           supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value }) =>
-            supabaseResponse.cookies.set(name, value),
-          );
+          cookiesToSet.forEach(({ name, value, options = {} }) => {
+            // Strip maxAge/expires so dashboard auth cookies are session cookies
+            // (cleared on browser close, not on soft refresh).
+            const { maxAge, expires, ...rest } = options;
+            const isRemoval = maxAge === 0;
+            supabaseResponse.cookies.set(name, value, {
+              ...rest,
+              ...(isRemoval ? { maxAge: 0 } : {}),
+            });
+          });
         },
       },
     },

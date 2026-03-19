@@ -2,13 +2,14 @@
 
 /**
  * InactivityLogout — Registration Portal (Dashboard)
- * - Logs out after 15 minutes of inactivity
- * - Instantly revokes session when tab/window is closed
+ * Logs out after 15 minutes of inactivity.
+ *
+ * On timeout: navigates to /api/logout/dashboard (GET) which signs out
+ * server-side and redirects to /login — no client-side signOut(), so
+ * onAuthStateChange never fires and the layout never goes blank.
  */
 
 import { useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/supabase/client";
 
 const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
@@ -22,17 +23,14 @@ const ACTIVITY_EVENTS = [
 ];
 
 export default function InactivityLogout() {
-  const router = useRouter();
   const timerRef = useRef(null);
   const isLoggingOut = useRef(false);
 
-  const performLogout = useCallback(async () => {
+  const performLogout = useCallback(() => {
     if (isLoggingOut.current) return;
     isLoggingOut.current = true;
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }, [router]);
+    window.location.replace("/api/logout/dashboard");
+  }, []);
 
   const resetTimer = useCallback(() => {
     clearTimeout(timerRef.current);
@@ -46,16 +44,9 @@ export default function InactivityLogout() {
       window.addEventListener(ev, resetTimer, { passive: true })
     );
 
-    // Revoke session immediately when tab/window is closed
-    const handlePageHide = () => {
-      navigator.sendBeacon("/api/logout/dashboard");
-    };
-    window.addEventListener("pagehide", handlePageHide);
-
     return () => {
       clearTimeout(timerRef.current);
       ACTIVITY_EVENTS.forEach((ev) => window.removeEventListener(ev, resetTimer));
-      window.removeEventListener("pagehide", handlePageHide);
     };
   }, [resetTimer]);
 

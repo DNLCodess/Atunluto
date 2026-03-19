@@ -1,7 +1,7 @@
 // components/shared/admin/layout-wrapper.jsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import Sidebar from "./sidebar";
 import MobileMenu from "./mobile";
@@ -11,6 +11,12 @@ import InactivityLogout from "./InactivityLogout";
 export default function AdminLayoutWrapper({ children }) {
   const { isAuthenticated, isLoading, isNetworkError } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !isNetworkError && !isAuthenticated) {
+      window.location.replace("/login");
+    }
+  }, [isLoading, isNetworkError, isAuthenticated]);
 
   // Genuinely resolving auth for the first time — show spinner
   if (isLoading) {
@@ -68,8 +74,11 @@ export default function AdminLayoutWrapper({ children }) {
     );
   }
 
-  // Middleware handles the redirect — this is a last-resort defensive guard
-  if (!isAuthenticated) return null;
+  // Middleware handles the redirect for all unauthenticated requests.
+  // The useEffect above is a last-resort client-side fallback.
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

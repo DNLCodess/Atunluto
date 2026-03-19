@@ -104,7 +104,11 @@ export function useAuth() {
     refetchOnReconnect: true, // re-validate when network comes back
   });
 
-  // Auth state listener
+  // Auth state listener — only handles token refresh.
+  // Logout is handled server-side via /api/logout/dashboard (hard redirect).
+  // The SIGNED_OUT handler was removed because it set isAuthenticated = false
+  // synchronously, causing AdminLayoutWrapper to render null (blank page)
+  // before the page navigation completed.
   useEffect(() => {
     if (listenerRef.current) return;
     listenerRef.current = true;
@@ -114,9 +118,6 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === "TOKEN_REFRESHED") {
         queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEY });
-      } else if (event === "SIGNED_OUT") {
-        queryClient.setQueryData(AUTH_QUERY_KEY, null);
-        queryClient.clear();
       }
     });
 
@@ -136,18 +137,6 @@ export function useAuth() {
         profile: data.profile,
         role: data.profile.role,
       });
-    },
-  });
-
-  // Logout
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.setQueryData(AUTH_QUERY_KEY, null);
-      queryClient.clear();
     },
   });
 
@@ -183,9 +172,6 @@ export function useAuth() {
     login: loginMutation.mutate,
     isLoggingIn: loginMutation.isPending,
     loginError: loginMutation.error?.message ?? null,
-
-    logout: logoutMutation.mutate,
-    isLoggingOut: logoutMutation.isPending,
   };
 }
 

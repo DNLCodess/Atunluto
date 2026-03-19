@@ -3,22 +3,28 @@
 /**
  * app/actions/election-auth.js
  * Server actions for the Election Results Management System auth layer.
- * Operates entirely on the election_admins + admin_sessions tables.
- * Does NOT use Supabase Auth — credentials are managed manually with bcrypt.
+ *
+ * Auth is now handled entirely by Supabase Auth (signInWithPassword /
+ * signOut / updateUser). The election_admins table is kept as the source
+ * of truth for ERMS-specific metadata: role, lga, ward, polling_unit,
+ * is_active, must_change_password.
+ *
+ * Cookies are written by createErmsClient() which namespaces them as
+ * "erms_sb-*" and scopes them to path /results-portal — they never
+ * conflict with the dashboard's own Supabase session cookies.
+ *
+ * The admin_sessions table and bcrypt password hashing are no longer used.
  */
 
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import bcrypt from "bcryptjs";
+import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/supabase/admin";
+import { createErmsClient } from "@/supabase/erms-server";
 import {
   generateSecurePassword,
   validatePasswordStrength,
 } from "@/utils/password-generator";
-
-const SESSION_COOKIE = "erms_session";
-const SESSION_DURATION = 8 * 60 * 60 * 1000;
-const BCRYPT_ROUNDS = 12;
 
 // ─────────────────────────────────────────
 // DEBUG LOGGER
@@ -39,6 +45,28 @@ function logError(fn, msg, err = undefined) {
 }
 
 // ─────────────────────────────────────────
+// AUDIT LOGGER
+// ─────────────────────────────────────────
+
+async function logAuthEvent(supabase, adminId, action, ipAddress, userAgent, notes = null) {
+  log("logAuthEvent", `Writing audit event: ${action}`, { adminId, notes });
+  try {
+    const { error } = await supabase.from("result_audit_log").insert({
+      action,
+      table_name: "election_admins",
+      performed_by: adminId,
+      ip_address: ipAddress,
+      user_agent: userAgent,
+      notes,
+    });
+    if (error) logError("logAuthEvent", "Insert returned error:", error);
+    else log("logAuthEvent", `Audit event ${action} written ✓`);
+  } catch (err) {
+    logError("logAuthEvent", "Unexpected exception:", err);
+  }
+}
+
+// ─────────────────────────────────────────
 // LOGIN
 // ─────────────────────────────────────────
 
@@ -55,116 +83,52 @@ export async function loginResultsAdmin(formData) {
   }
 
   const supabase = createAdminClient();
-
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
+  // Fetch ERMS profile first — cheaper than an auth round-trip for inactive accounts
   log("loginResultsAdmin", `Querying election_admins for email: ${email}`);
   const { data: admin, error: fetchError } = await supabase
     .from("election_admins")
-    .select(
-      "id, email, full_name, role, lga, password_hash, must_change_password, is_active",
-    )
+    .select("id, email, full_name, role, lga, must_change_password, is_active")
     .eq("email", email)
     .single();
 
   if (fetchError) logError("loginResultsAdmin", "DB fetch error:", fetchError);
 
   if (fetchError || !admin) {
-    await logAuthEvent(
-      supabase,
-      null,
-      "LOGIN_FAILED",
-      ipAddress,
-      userAgent,
-      `No account: ${email}`,
-    );
+    await logAuthEvent(supabase, null, "LOGIN_FAILED", ipAddress, userAgent, `No account: ${email}`);
     return { error: "Invalid email or password." };
   }
-
-  log("loginResultsAdmin", "Admin record found:", {
-    id: admin.id,
-    role: admin.role,
-    lga: admin.lga,
-    is_active: admin.is_active,
-    must_change_password: admin.must_change_password,
-    has_password_hash: !!admin.password_hash,
-  });
 
   if (!admin.is_active) {
-    await logAuthEvent(
-      supabase,
-      admin.id,
-      "LOGIN_FAILED",
-      ipAddress,
-      userAgent,
-      "Account deactivated",
-    );
-    return {
-      error: "Your account has been deactivated. Contact the State Admin.",
-    };
+    await logAuthEvent(supabase, admin.id, "LOGIN_FAILED", ipAddress, userAgent, "Account deactivated");
+    return { error: "Your account has been deactivated. Contact the State Admin." };
   }
 
-  if (!admin.password_hash) {
-    logError("loginResultsAdmin", "No password hash on record for admin:", admin.id);
-    return { error: "Account setup is incomplete. Contact the system administrator." };
-  }
+  // Authenticate via Supabase Auth — this sets the erms_sb-* session cookies
+  const ermsClient = await createErmsClient();
+  const { error: signInError } = await ermsClient.auth.signInWithPassword({ email, password });
 
-  const passwordMatch = await bcrypt.compare(password, admin.password_hash);
-  log("loginResultsAdmin", "Password match result:", passwordMatch);
-
-  if (!passwordMatch) {
-    await logAuthEvent(
-      supabase,
-      admin.id,
-      "LOGIN_FAILED",
-      ipAddress,
-      userAgent,
-      "Bad password",
-    );
+  if (signInError) {
+    log("loginResultsAdmin", "signInWithPassword failed:", signInError.message);
+    await logAuthEvent(supabase, admin.id, "LOGIN_FAILED", ipAddress, userAgent, "Bad password");
     return { error: "Invalid email or password." };
   }
 
-  const sessionToken = generateSessionToken();
-  const expiresAt = new Date(Date.now() + SESSION_DURATION);
+  log("loginResultsAdmin", "signInWithPassword succeeded ✓");
 
-  const { error: sessionError } = await supabase.from("admin_sessions").insert({
-    admin_id: admin.id,
-    session_token: sessionToken,
-    ip_address: ipAddress,
-    user_agent: userAgent,
-    expires_at: expiresAt.toISOString(),
-  });
-
-  if (sessionError) {
-    logError("loginResultsAdmin", "Session insert failed:", sessionError);
-    return { error: "Login failed. Please try again." };
-  }
-
+  // Update last_login (non-fatal)
   const { error: lastLoginError } = await supabase
     .from("election_admins")
     .update({ last_login: new Date().toISOString() })
     .eq("id", admin.id);
-
   if (lastLoginError)
-    logError(
-      "loginResultsAdmin",
-      "last_login update failed (non-fatal):",
-      lastLoginError,
-    );
+    logError("loginResultsAdmin", "last_login update failed (non-fatal):", lastLoginError);
 
   await logAuthEvent(supabase, admin.id, "LOGIN_SUCCESS", ipAddress, userAgent);
   log("loginResultsAdmin", "Audit event LOGIN_SUCCESS written ✓");
-
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, sessionToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/results-portal",
-  });
-  log("loginResultsAdmin", "Cookie set ✓");
 
   if (admin.must_change_password) {
     redirect("/results-portal/change-password");
@@ -173,9 +137,10 @@ export async function loginResultsAdmin(formData) {
   const roleDest =
     admin.role === "state_admin"
       ? "/results-portal/admin"
-      : "/results-portal/lga";
+      : admin.role === "polling_unit_admin"
+        ? "/results-portal/pu"
+        : "/results-portal/lga";
 
-  // Honour original destination if it's a safe internal ERMS path
   const isSafe =
     from &&
     from.startsWith("/results-portal/") &&
@@ -185,6 +150,7 @@ export async function loginResultsAdmin(formData) {
   log("loginResultsAdmin", `Redirecting to: ${isSafe ? from : roleDest}`);
   redirect(isSafe ? from : roleDest);
 }
+
 // ─────────────────────────────────────────
 // LOGOUT
 // ─────────────────────────────────────────
@@ -192,26 +158,25 @@ export async function loginResultsAdmin(formData) {
 export async function logoutResultsAdmin() {
   log("logoutResultsAdmin", "▶ Action invoked");
 
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  try {
+    const ermsClient = await createErmsClient();
 
-  if (token) {
-    const supabase = createAdminClient(); // ← was createClient()
-    const { error } = await supabase
-      .from("admin_sessions")
-      .update({ is_revoked: true })
-      .eq("session_token", token);
+    // Capture user ID before signing out for the audit log
+    const { data: { user } } = await ermsClient.auth.getUser();
 
-    if (error)
-      logError(
-        "logoutResultsAdmin",
-        "Session revoke failed (non-fatal):",
-        error,
-      );
-    else log("logoutResultsAdmin", "Session revoked in DB ✓");
+    if (user) {
+      const supabase = createAdminClient();
+      const hdrs = await headers();
+      const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
+      const userAgent = hdrs.get("user-agent") || "unknown";
+      await logAuthEvent(supabase, user.id, "LOGOUT", ipAddress, userAgent);
+      log("logoutResultsAdmin", "Audit event LOGOUT written ✓");
+    }
 
-    cookieStore.delete(SESSION_COOKIE);
-    log("logoutResultsAdmin", "Cookie deleted ✓");
+    await ermsClient.auth.signOut();
+    log("logoutResultsAdmin", "signOut succeeded ✓");
+  } catch (err) {
+    logError("logoutResultsAdmin", "Unexpected error (non-fatal):", err);
   }
 
   redirect("/results-portal/login");
@@ -224,49 +189,41 @@ export async function logoutResultsAdmin() {
 export async function getResultsSession() {
   log("getResultsSession", "▶ Called");
 
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  try {
+    const ermsClient = await createErmsClient();
 
-  if (!token) {
-    log("getResultsSession", "No session cookie found → returning null");
+    // getClaims() reads the JWT from the erms_sb-* cookies without a network
+    // call. Returns null if there is no valid token.
+    const { data } = await ermsClient.auth.getClaims();
+    const userId = data?.claims?.sub;
+
+    if (!userId) {
+      log("getResultsSession", "No valid JWT claim → returning null");
+      return null;
+    }
+
+    const supabase = createAdminClient();
+    const { data: admin, error: adminErr } = await supabase
+      .from("election_admins")
+      .select("id, email, full_name, role, lga, ward, polling_unit, must_change_password, is_active")
+      .eq("id", userId)
+      .single();
+
+    if (adminErr) logError("getResultsSession", "Admin fetch error:", adminErr);
+    if (!admin || !admin.is_active) return null;
+
+    log("getResultsSession", "Session valid, admin:", {
+      id: admin.id,
+      role: admin.role,
+      lga: admin.lga,
+      must_change_password: admin.must_change_password,
+    });
+
+    return admin;
+  } catch (err) {
+    logError("getResultsSession", "Unexpected error:", err);
     return null;
   }
-
-  const supabase = createAdminClient(); // ← was createClient()
-
-  const { data: session, error: sessionErr } = await supabase
-    .from("admin_sessions")
-    .select("admin_id, expires_at, is_revoked")
-    .eq("session_token", token)
-    .single();
-
-  if (sessionErr)
-    logError("getResultsSession", "Session query error:", sessionErr);
-  if (!session) return null;
-  if (session.is_revoked) return null;
-
-  if (new Date(session.expires_at) < new Date()) {
-    log("getResultsSession", "Session expired → returning null");
-    return null;
-  }
-
-  const { data: admin, error: adminErr } = await supabase
-    .from("election_admins")
-    .select("id, email, full_name, role, lga, must_change_password, is_active")
-    .eq("id", session.admin_id)
-    .single();
-
-  if (adminErr) logError("getResultsSession", "Admin fetch error:", adminErr);
-  if (!admin || !admin.is_active) return null;
-
-  log("getResultsSession", "Session valid, admin:", {
-    id: admin.id,
-    role: admin.role,
-    lga: admin.lga,
-    must_change_password: admin.must_change_password,
-  });
-
-  return { ...admin, sessionToken: token };
 }
 
 // ─────────────────────────────────────────
@@ -280,13 +237,11 @@ export async function changeResultsPassword(formData) {
   const newPassword = formData.get("new_password")?.toString();
   const confirmPassword = formData.get("confirm_password")?.toString();
 
-  if (!newPassword || !confirmPassword) {
+  if (!newPassword || !confirmPassword)
     return { error: "All fields are required." };
-  }
 
-  if (newPassword !== confirmPassword) {
+  if (newPassword !== confirmPassword)
     return { error: "Passwords do not match." };
-  }
 
   const { valid, errors } = validatePasswordStrength(newPassword);
   if (!valid) return { error: errors[0] };
@@ -294,62 +249,57 @@ export async function changeResultsPassword(formData) {
   const session = await getResultsSession();
   if (!session) return { error: "Session expired. Please log in again." };
 
-  const supabase = createAdminClient(); // ← was createClient()
+  const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
+  // Verify current password using a throw-away non-SSR client so no new
+  // session cookies are written during the check.
   if (currentPassword) {
-    const { data: adminRow, error: fetchErr } = await supabase
-      .from("election_admins")
-      .select("password_hash")
-      .eq("id", session.id)
-      .single();
+    const throwaway = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
+    const { error: verifyError } = await throwaway.auth.signInWithPassword({
+      email: session.email,
+      password: currentPassword,
+    });
+    if (verifyError) return { error: "Current password is incorrect." };
 
-    if (fetchErr)
-      logError(
-        "changeResultsPassword",
-        "Failed to fetch current hash:",
-        fetchErr,
-      );
-
-    const match =
-      adminRow &&
-      (await bcrypt.compare(currentPassword, adminRow.password_hash));
-    if (!match) return { error: "Current password is incorrect." };
-    if (currentPassword === newPassword) {
-      return {
-        error: "New password must be different from your current password.",
-      };
-    }
+    if (currentPassword === newPassword)
+      return { error: "New password must be different from your current password." };
   }
 
-  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  // Update the password via the ERMS SSR client (uses the active session JWT)
+  const ermsClient = await createErmsClient();
+  const { error: updateError } = await ermsClient.auth.updateUser({ password: newPassword });
 
-  const { error } = await supabase
-    .from("election_admins")
-    .update({ password_hash: passwordHash, must_change_password: false })
-    .eq("id", session.id);
-
-  if (error) {
-    logError("changeResultsPassword", "DB update failed:", error);
+  if (updateError) {
+    logError("changeResultsPassword", "Auth updateUser failed:", updateError);
     return { error: "Failed to update password. Please try again." };
   }
 
-  await logAuthEvent(
-    supabase,
-    session.id,
-    "PASSWORD_CHANGE",
-    ipAddress,
-    userAgent,
-  );
+  // Clear the must_change_password flag
+  const { error: dbError } = await supabase
+    .from("election_admins")
+    .update({ must_change_password: false })
+    .eq("id", session.id);
+
+  if (dbError)
+    logError("changeResultsPassword", "must_change_password clear failed (non-fatal):", dbError);
+
+  await logAuthEvent(supabase, session.id, "PASSWORD_CHANGE", ipAddress, userAgent);
   log("changeResultsPassword", "Audit event PASSWORD_CHANGE written ✓");
 
   if (session.must_change_password) {
     const dest =
       session.role === "state_admin"
         ? "/results-portal/admin"
-        : "/results-portal/lga";
+        : session.role === "polling_unit_admin"
+          ? "/results-portal/pu"
+          : "/results-portal/lga";
     redirect(dest);
   }
 
@@ -374,59 +324,44 @@ export async function createLGAAdmin(formData) {
     return { error: "Full name, email, and LGA are required." };
 
   const VALID_LGAS = [
-    "Ibadan North",
-    "Ibadan North-East",
-    "Ibadan North-West",
-    "Ibadan South-East",
-    "Ibadan South-West",
-    "Ibarapa Central",
-    "Ibarapa East",
-    "Ibarapa North",
-    "Ido",
+    "Ibadan North", "Ibadan North-East", "Ibadan North-West",
+    "Ibadan South-East", "Ibadan South-West", "Ibarapa Central",
+    "Ibarapa East", "Ibarapa North", "Ido",
   ];
   if (!VALID_LGAS.includes(lga)) return { error: "Invalid LGA selected." };
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
-
   const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
-  // Step 1 — Create in Supabase Auth first to satisfy the FK constraint
   log("createLGAAdmin", "Creating user in Supabase Auth...");
-  const { data: authUser, error: authError } =
-    await supabase.auth.admin.createUser({
-      email,
-      password: plainPassword,
-      email_confirm: true, // skip confirmation email
-      user_metadata: { full_name: fullName, role: "lga_admin", lga },
-    });
+  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password: plainPassword,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role: "lga_admin", lga },
+  });
 
   if (authError) {
-    if (authError.code === "email_exists" || authError.status === 422) {
+    if (authError.code === "email_exists" || authError.status === 422)
       return { error: "An account with this email address already exists." };
-    }
     logError("createLGAAdmin", "Supabase Auth creation failed:", authError);
-    return {
-      error: `Account creation failed: ${authError.message || "Unknown error"}`,
-    };
+    return { error: `Account creation failed: ${authError.message || "Unknown error"}` };
   }
 
   log("createLGAAdmin", "Auth user created:", authUser.user.id);
 
-  // Step 2 — Insert into election_admins using the auth user's ID
   const { data: newAdmin, error } = await supabase
     .from("election_admins")
     .insert({
-      id: authUser.user.id, // ← use the auth UUID so FK is satisfied
+      id: authUser.user.id,
       email,
       full_name: fullName,
       phone: phone || null,
       lga,
       role: "lga_admin",
-      password_hash: passwordHash,
       must_change_password: true,
       created_by: session.id,
     })
@@ -434,13 +369,11 @@ export async function createLGAAdmin(formData) {
     .single();
 
   if (error) {
-    // Rollback — delete the auth user if election_admins insert fails
     await supabase.auth.admin.deleteUser(authUser.user.id);
     logError("createLGAAdmin", "Insert error:", error);
     return { error: "Failed to create account. Please try again." };
   }
 
-  // Audit log
   await supabase.from("result_audit_log").insert({
     action: "INSERT",
     table_name: "election_admins",
@@ -456,7 +389,7 @@ export async function createLGAAdmin(formData) {
 }
 
 // ─────────────────────────────────────────
-// REGENERATE PASSWORD
+// REGENERATE LGA ADMIN PASSWORD
 // ─────────────────────────────────────────
 
 export async function regenerateLGAAdminPassword(adminId) {
@@ -465,65 +398,46 @@ export async function regenerateLGAAdminPassword(adminId) {
     return { error: "Unauthorised." };
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
-
   const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
-  // Update Supabase Auth password to keep them in sync
-  const { error: authError } = await supabase.auth.admin.updateUserById(
-    adminId,
-    {
-      password: plainPassword,
-    },
-  );
+  // Update password in Supabase Auth
+  const { error: authError } = await supabase.auth.admin.updateUserById(adminId, {
+    password: plainPassword,
+  });
+  if (authError)
+    logError("regenerateLGAAdminPassword", "Auth password update failed:", authError);
 
-  if (authError) {
-    logError(
-      "regenerateLGAAdminPassword",
-      "Auth password update failed:",
-      authError,
-    );
-    // Non-fatal — continue updating election_admins
-  }
-
-  // Update election_admins
+  // Update election_admins — force password change on next login
   const { error } = await supabase
     .from("election_admins")
-    .update({ password_hash: passwordHash, must_change_password: true })
+    .update({ must_change_password: true })
     .eq("id", adminId)
     .eq("role", "lga_admin");
 
   if (error) return { error: "Failed to regenerate password." };
 
-  // Revoke all sessions
-  await supabase
-    .from("admin_sessions")
-    .update({ is_revoked: true })
-    .eq("admin_id", adminId);
+  // Revoke all active sessions for this user
+  const { error: signOutError } = await supabase.auth.admin.signOut(adminId);
+  if (signOutError)
+    logError("regenerateLGAAdminPassword", "Session revoke failed (non-fatal):", signOutError);
 
   await logAuthEvent(
-    supabase,
-    adminId,
-    "PASSWORD_REGENERATE",
-    ipAddress,
-    userAgent,
+    supabase, adminId, "PASSWORD_REGENERATE", ipAddress, userAgent,
     `Regenerated by State Admin ${session.id}`,
   );
 
   return { success: true, plainPassword };
 }
+
 // ─────────────────────────────────────────
-// TOGGLE ACCOUNT STATUS
+// TOGGLE LGA ADMIN STATUS
 // ─────────────────────────────────────────
 
 export async function toggleLGAAdminStatus(adminId, activate) {
-  log(
-    "toggleLGAAdminStatus",
-    `▶ Action invoked — adminId: ${adminId}, activate: ${activate}`,
-  );
+  log("toggleLGAAdminStatus", `▶ Action invoked — adminId: ${adminId}, activate: ${activate}`);
 
   const session = await getResultsSession();
   if (!session || session.role !== "state_admin")
@@ -534,7 +448,6 @@ export async function toggleLGAAdminStatus(adminId, activate) {
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
-  // Update election_admins
   const { error } = await supabase
     .from("election_admins")
     .update({ is_active: activate })
@@ -545,96 +458,28 @@ export async function toggleLGAAdminStatus(adminId, activate) {
     logError("toggleLGAAdminStatus", "election_admins update failed:", error);
     return { error: "Failed to update account status." };
   }
-  log("toggleLGAAdminStatus", "election_admins is_active updated ✓");
 
-  // Sync with Supabase Auth — ban/unban the user
-  const { error: authError } = await supabase.auth.admin.updateUserById(
-    adminId,
-    {
-      ban_duration: activate ? "none" : "876600h", // unban or ban ~100 years
-    },
-  );
+  // Sync with Supabase Auth — ban/unban
+  const { error: authError } = await supabase.auth.admin.updateUserById(adminId, {
+    ban_duration: activate ? "none" : "876600h",
+  });
+  if (authError)
+    logError("toggleLGAAdminStatus", "Supabase Auth ban/unban failed (non-fatal):", authError);
 
-  if (authError) {
-    logError(
-      "toggleLGAAdminStatus",
-      "Supabase Auth ban/unban failed (non-fatal):",
-      authError,
-    );
-    // Non-fatal — election_admins is the authoritative gate for ERMS login
-  } else {
-    log(
-      "toggleLGAAdminStatus",
-      `Supabase Auth ban_duration set to ${activate ? "none" : "876600h"} ✓`,
-    );
-  }
-
-  // On deactivation — revoke all active ERMS sessions
+  // On deactivation — force sign out all active sessions
   if (!activate) {
-    const { error: revokeErr } = await supabase
-      .from("admin_sessions")
-      .update({ is_revoked: true })
-      .eq("admin_id", adminId);
-
-    if (revokeErr) {
-      logError(
-        "toggleLGAAdminStatus",
-        "Session revoke failed (non-fatal):",
-        revokeErr,
-      );
-    } else {
-      log("toggleLGAAdminStatus", "All ERMS sessions revoked ✓");
-    }
+    const { error: signOutError } = await supabase.auth.admin.signOut(adminId);
+    if (signOutError)
+      logError("toggleLGAAdminStatus", "Session revoke failed (non-fatal):", signOutError);
   }
 
   const action = activate ? "ACCOUNT_ACTIVATED" : "ACCOUNT_DEACTIVATED";
   await logAuthEvent(
-    supabase,
-    adminId,
-    action,
-    ipAddress,
-    userAgent,
+    supabase, adminId, action, ipAddress, userAgent,
     `${activate ? "Activated" : "Deactivated"} by State Admin ${session.id}`,
   );
-  log("toggleLGAAdminStatus", `Audit event ${action} written ✓`);
 
   return { success: true };
-}
-// ─────────────────────────────────────────
-// INTERNAL HELPERS
-// ─────────────────────────────────────────
-
-function generateSessionToken() {
-  const arr = new Uint8Array(32);
-  crypto.getRandomValues(arr);
-  return Array.from(arr)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function logAuthEvent(
-  supabase,
-  adminId,
-  action,
-  ipAddress,
-  userAgent,
-  notes = null,
-) {
-  log("logAuthEvent", `Writing audit event: ${action}`, { adminId, notes });
-  try {
-    const { error } = await supabase.from("result_audit_log").insert({
-      action,
-      table_name: "admin_sessions",
-      performed_by: adminId,
-      ip_address: ipAddress,
-      user_agent: userAgent,
-      notes,
-    });
-    if (error) logError("logAuthEvent", "Insert returned error:", error);
-    else log("logAuthEvent", `Audit event ${action} written ✓`);
-  } catch (err) {
-    logError("logAuthEvent", "Unexpected exception:", err);
-  }
 }
 
 // ─────────────────────────────────────────
@@ -654,57 +499,37 @@ export async function createPUAdmin(formData) {
   const pollingUnit = formData.get("polling_unit")?.toString().trim();
 
   if (!fullName || !email || !lga || !ward || !pollingUnit)
-    return {
-      error: "Full name, email, LGA, ward, and polling unit are required.",
-    };
+    return { error: "Full name, email, LGA, ward, and polling unit are required." };
 
-  // LGA admins can only create PU admins for their own LGA
   if (session.role === "lga_admin" && lga !== session.lga)
     return { error: "You can only create PU Admins for your assigned LGA." };
 
   const VALID_LGAS = [
-    "Ibadan North",
-    "Ibadan North-East",
-    "Ibadan North-West",
-    "Ibadan South-East",
-    "Ibadan South-West",
-    "Ibarapa Central",
-    "Ibarapa East",
-    "Ibarapa North",
-    "Ido",
+    "Ibadan North", "Ibadan North-East", "Ibadan North-West",
+    "Ibadan South-East", "Ibadan South-West", "Ibarapa Central",
+    "Ibarapa East", "Ibarapa North", "Ido",
   ];
   if (!VALID_LGAS.includes(lga)) return { error: "Invalid LGA selected." };
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
-
   const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
   log("createPUAdmin", "Creating user in Supabase Auth...");
-  const { data: authUser, error: authError } =
-    await supabase.auth.admin.createUser({
-      email,
-      password: plainPassword,
-      email_confirm: true,
-      user_metadata: {
-        full_name: fullName,
-        role: "polling_unit_admin",
-        lga,
-        ward,
-        polling_unit: pollingUnit,
-      },
-    });
+  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password: plainPassword,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role: "polling_unit_admin", lga, ward, polling_unit: pollingUnit },
+  });
 
   if (authError) {
     if (authError.code === "email_exists" || authError.status === 422)
       return { error: "An account with this email address already exists." };
     logError("createPUAdmin", "Auth creation failed:", authError);
-    return {
-      error: `Account creation failed: ${authError.message || "Unknown error"}`,
-    };
+    return { error: `Account creation failed: ${authError.message || "Unknown error"}` };
   }
 
   const { data: newAdmin, error } = await supabase
@@ -718,7 +543,6 @@ export async function createPUAdmin(formData) {
       ward,
       polling_unit: pollingUnit,
       role: "polling_unit_admin",
-      password_hash: passwordHash,
       must_change_password: true,
       created_by: session.id,
       parent_admin_id: session.role === "lga_admin" ? session.id : null,
@@ -736,14 +560,7 @@ export async function createPUAdmin(formData) {
     action: "INSERT",
     table_name: "election_admins",
     record_id: newAdmin.id,
-    new_values: {
-      email,
-      full_name: fullName,
-      lga,
-      ward,
-      polling_unit: pollingUnit,
-      role: "polling_unit_admin",
-    },
+    new_values: { email, full_name: fullName, lga, ward, polling_unit: pollingUnit, role: "polling_unit_admin" },
     performed_by: session.id,
     ip_address: ipAddress,
     user_agent: userAgent,
@@ -767,7 +584,6 @@ export async function regeneratePUAdminPassword(adminId) {
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
-  // LGA admin: verify target belongs to their LGA
   if (session.role === "lga_admin") {
     const { data: target } = await supabase
       .from("election_admins")
@@ -780,30 +596,21 @@ export async function regeneratePUAdminPassword(adminId) {
   }
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
 
-  await supabase.auth.admin.updateUserById(adminId, {
-    password: plainPassword,
-  });
+  await supabase.auth.admin.updateUserById(adminId, { password: plainPassword });
 
   const { error } = await supabase
     .from("election_admins")
-    .update({ password_hash: passwordHash, must_change_password: true })
+    .update({ must_change_password: true })
     .eq("id", adminId)
     .eq("role", "polling_unit_admin");
 
   if (error) return { error: "Failed to regenerate password." };
 
-  await supabase
-    .from("admin_sessions")
-    .update({ is_revoked: true })
-    .eq("admin_id", adminId);
+  await supabase.auth.admin.signOut(adminId);
+
   await logAuthEvent(
-    supabase,
-    adminId,
-    "PASSWORD_REGENERATE",
-    ipAddress,
-    userAgent,
+    supabase, adminId, "PASSWORD_REGENERATE", ipAddress, userAgent,
     `Regenerated by ${session.role} ${session.id}`,
   );
 
@@ -847,24 +654,18 @@ export async function togglePUAdminStatus(adminId, activate) {
     ban_duration: activate ? "none" : "876600h",
   });
 
-  if (!activate) {
-    await supabase
-      .from("admin_sessions")
-      .update({ is_revoked: true })
-      .eq("admin_id", adminId);
-  }
+  if (!activate) await supabase.auth.admin.signOut(adminId);
 
   await logAuthEvent(
-    supabase,
-    adminId,
+    supabase, adminId,
     activate ? "ACCOUNT_ACTIVATED" : "ACCOUNT_DEACTIVATED",
-    ipAddress,
-    userAgent,
+    ipAddress, userAgent,
     `By ${session.role} ${session.id}`,
   );
 
   return { success: true };
 }
+
 // ─────────────────────────────────────────
 // CREATE ELECTION STATE ADMIN
 // ─────────────────────────────────────────
@@ -882,27 +683,22 @@ export async function createElectionStateAdmin(formData) {
     return { error: "Full name and email are required." };
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
-
   const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
-  const { data: authUser, error: authError } =
-    await supabase.auth.admin.createUser({
-      email,
-      password: plainPassword,
-      email_confirm: true,
-      user_metadata: { full_name: fullName, role: "state_admin" },
-    });
+  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password: plainPassword,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role: "state_admin" },
+  });
 
   if (authError) {
     if (authError.code === "email_exists" || authError.status === 422)
       return { error: "An account with this email address already exists." };
-    return {
-      error: `Account creation failed: ${authError.message || "Unknown error"}`,
-    };
+    return { error: `Account creation failed: ${authError.message || "Unknown error"}` };
   }
 
   const { data: newAdmin, error } = await supabase
@@ -913,7 +709,6 @@ export async function createElectionStateAdmin(formData) {
       full_name: fullName,
       phone: phone || null,
       role: "state_admin",
-      password_hash: passwordHash,
       must_change_password: true,
       created_by: session.id,
     })
@@ -969,20 +764,11 @@ export async function toggleElectionStateAdminStatus(adminId, activate) {
     ban_duration: activate ? "none" : "876600h",
   });
 
-  if (!activate) {
-    await supabase
-      .from("admin_sessions")
-      .update({ is_revoked: true })
-      .eq("admin_id", adminId);
-  }
+  if (!activate) await supabase.auth.admin.signOut(adminId);
 
   const action = activate ? "ACCOUNT_ACTIVATED" : "ACCOUNT_DEACTIVATED";
   await logAuthEvent(
-    supabase,
-    adminId,
-    action,
-    ipAddress,
-    userAgent,
+    supabase, adminId, action, ipAddress, userAgent,
     `${activate ? "Activated" : "Deactivated"} by State Admin ${session.id}`,
   );
 
@@ -999,41 +785,34 @@ export async function regenerateElectionStateAdminPassword(adminId) {
     return { error: "Unauthorised." };
 
   const plainPassword = generateSecurePassword(12);
-  const passwordHash = await bcrypt.hash(plainPassword, BCRYPT_ROUNDS);
-
   const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
-  await supabase.auth.admin.updateUserById(adminId, {
-    password: plainPassword,
-  });
+  await supabase.auth.admin.updateUserById(adminId, { password: plainPassword });
 
   const { error } = await supabase
     .from("election_admins")
-    .update({ password_hash: passwordHash, must_change_password: true })
+    .update({ must_change_password: true })
     .eq("id", adminId)
     .eq("role", "state_admin");
 
   if (error) return { error: "Failed to regenerate password." };
 
-  await supabase
-    .from("admin_sessions")
-    .update({ is_revoked: true })
-    .eq("admin_id", adminId);
+  await supabase.auth.admin.signOut(adminId);
 
   await logAuthEvent(
-    supabase,
-    adminId,
-    "PASSWORD_REGENERATE",
-    ipAddress,
-    userAgent,
+    supabase, adminId, "PASSWORD_REGENERATE", ipAddress, userAgent,
     `Regenerated by State Admin ${session.id}`,
   );
 
   return { success: true, plainPassword };
 }
+
+// ─────────────────────────────────────────
+// UPDATE RESULT STATUS
+// ─────────────────────────────────────────
 
 export async function updateResultStatus(resultId, status) {
   const session = await getResultsSession();
@@ -1043,12 +822,11 @@ export async function updateResultStatus(resultId, status) {
   const VALID_STATUSES = ["pending", "verified", "disputed"];
   if (!VALID_STATUSES.includes(status)) return { error: "Invalid status." };
 
-  const supabase = createAdminClient(); // service role — bypasses RLS
+  const supabase = createAdminClient();
   const hdrs = await headers();
   const ipAddress = hdrs.get("x-forwarded-for") || "unknown";
   const userAgent = hdrs.get("user-agent") || "unknown";
 
-  // Fetch old value for audit log
   const { data: old } = await supabase
     .from("election_results")
     .select("status")
@@ -1062,7 +840,6 @@ export async function updateResultStatus(resultId, status) {
 
   if (error) return { error: error.message };
 
-  // Audit log
   await supabase.from("result_audit_log").insert({
     action: "UPDATE",
     table_name: "election_results",

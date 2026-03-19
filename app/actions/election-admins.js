@@ -39,11 +39,8 @@ export async function deleteElectionAdmin(adminId) {
 
   const supabase = createAdminClient();
 
-  // Revoke all sessions first
-  await supabase
-    .from("admin_sessions")
-    .update({ is_revoked: true })
-    .eq("admin_id", adminId);
+  // Revoke all active Supabase Auth sessions for this user before deletion
+  await supabase.auth.admin.signOut(adminId);
 
   // Delete from election_admins
   const { error: dbError } = await supabase

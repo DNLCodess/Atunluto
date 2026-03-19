@@ -3,7 +3,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "next/navigation";
 import { LogOut, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -15,8 +14,7 @@ const ROLE_LABELS = {
 };
 
 export default function Header({ sidebarOpen, setSidebarOpen }) {
-  const { user, profile, role, logout } = useAuth();
-  const router = useRouter();
+  const { user, profile, role } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -32,9 +30,7 @@ export default function Header({ sidebarOpen, setSidebarOpen }) {
 
   const handleLogout = () => {
     setDropdownOpen(false);
-    logout(undefined, {
-      onSuccess: () => router.replace("/login"),
-    });
+    window.location.replace("/api/logout/dashboard");
   };
 
   const displayName = user?.email || "Admin";
