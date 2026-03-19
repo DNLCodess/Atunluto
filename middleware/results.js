@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 const SESSION_COOKIE = "erms_session";
-const PUBLIC_PATHS = ["/results-portal/login"];
+const PUBLIC_PATHS = ["/results-portal/login", "/results-portal/logout"];
 const CHANGE_PWD_PATH = "/results-portal/change-password";
 const STATE_ADMIN_BASE = "/results-portal/admin";
 const LGA_ADMIN_BASE = "/results-portal/lga";

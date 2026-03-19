@@ -8,6 +8,7 @@ import { headers } from "next/headers";
 import Image from "next/image";
 import { logoutResultsAdmin } from "@/app/actions/election-auth";
 import PUSidebarNav from "./sidebar";
+import ERMSInactivityLogout from "@/components/election-results/InactivityLogout";
 
 export default async function PULayout({ children }) {
   const hdrs = await headers();
@@ -123,7 +124,10 @@ export default async function PULayout({ children }) {
         </div>
       </aside>
 
-      <main className="flex-1 w-full h-screen overflow-y-auto">{children}</main>
+      <main className="flex-1 w-full h-screen overflow-y-auto">
+        <ERMSInactivityLogout />
+        {children}
+      </main>
     </div>
   );
 }

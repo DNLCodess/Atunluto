@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Sidebar from "./sidebar";
 import MobileMenu from "./mobile";
 import Header from "./header";
+import InactivityLogout from "./InactivityLogout";
 
 export default function AdminLayoutWrapper({ children }) {
   const { isAuthenticated, isLoading, isNetworkError } = useAuth();
@@ -72,6 +73,7 @@ export default function AdminLayoutWrapper({ children }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <InactivityLogout />
       {sidebarOpen && <MobileMenu setSidebarOpen={setSidebarOpen} />}
 
       <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col">

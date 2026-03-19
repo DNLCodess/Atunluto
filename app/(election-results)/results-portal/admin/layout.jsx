@@ -6,6 +6,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Sidebar from "./sidebar";
+import ERMSInactivityLogout from "@/components/election-results/InactivityLogout";
 
 export default async function StateAdminLayout({ children }) {
   const hdrs = await headers();
@@ -33,6 +34,7 @@ export default async function StateAdminLayout({ children }) {
 
       {/* Main — scrolls independently */}
       <main className="flex-1 min-w-0 h-screen overflow-y-auto print:overflow-visible">
+        <ERMSInactivityLogout />
         {children}
       </main>
     </div>
