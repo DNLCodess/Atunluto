@@ -3,7 +3,11 @@
 /**
  * ERMSInactivityLogout — Election Results Portal
  * - Logs out after 15 minutes of inactivity
- * - Instantly revokes session when tab/window is closed
+ *
+ * Note: sendBeacon on pagehide was removed — pagehide fires on page refresh
+ * as well as tab close, making it impossible to distinguish the two without
+ * a more complex architecture. The 15-minute inactivity timer is the primary
+ * security mechanism.
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -31,7 +35,7 @@ export default function ERMSInactivityLogout() {
     try {
       await fetch("/results-portal/logout", { method: "POST" });
     } catch {
-      // best effort — the beacon also covers the revocation
+      // best effort
     }
     router.replace("/results-portal/login");
   }, [router]);
@@ -48,16 +52,9 @@ export default function ERMSInactivityLogout() {
       window.addEventListener(ev, resetTimer, { passive: true })
     );
 
-    // Revoke session immediately when tab/window is closed
-    const handlePageHide = () => {
-      navigator.sendBeacon("/results-portal/logout");
-    };
-    window.addEventListener("pagehide", handlePageHide);
-
     return () => {
       clearTimeout(timerRef.current);
       ACTIVITY_EVENTS.forEach((ev) => window.removeEventListener(ev, resetTimer));
-      window.removeEventListener("pagehide", handlePageHide);
     };
   }, [resetTimer]);
 
