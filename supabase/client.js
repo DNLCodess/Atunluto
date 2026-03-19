@@ -5,6 +5,13 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
+      auth: {
+        // Use sessionStorage instead of the default localStorage so tokens
+        // are cleared when the tab/window is closed, not just on browser close.
+        // This also accounts for Supabase's 400-day refresh token — it won't
+        // survive a tab close regardless of its intended lifetime.
+        storage: typeof window !== "undefined" ? window.sessionStorage : undefined,
+      },
       cookies: {
         getAll() {
           if (typeof document === "undefined") return [];
