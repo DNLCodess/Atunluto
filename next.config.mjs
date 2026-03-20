@@ -3,6 +3,9 @@ const nextConfig = {
   // Enable React strict mode for better development experience
   reactStrictMode: true,
   output: "standalone",
+  generateBuildId: async () => {
+    return Date.now().toString();
+  },
   // Configure image optimization
   images: {
     formats: ["image/avif", "image/webp"],
@@ -100,6 +103,7 @@ const nextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",
   },
+
   turbopack: {},
 };
 
