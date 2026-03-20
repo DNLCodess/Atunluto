@@ -16,7 +16,7 @@
  * The admin_sessions table and bcrypt password hashing are no longer used.
  */
 
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/supabase/admin";
@@ -129,6 +129,16 @@ export async function loginResultsAdmin(formData) {
 
   await logAuthEvent(supabase, admin.id, "LOGIN_SUCCESS", ipAddress, userAgent);
   log("loginResultsAdmin", "Audit event LOGIN_SUCCESS written ✓");
+
+  // Seed the server-side idle-timeout cookie so the middleware can enforce
+  // last_active checks immediately on the first authenticated request.
+  const cookieStore = await cookies();
+  cookieStore.set("erms_last_active", String(Date.now()), {
+    path: "/results-portal",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
 
   if (admin.must_change_password) {
     redirect("/results-portal/change-password");

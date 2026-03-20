@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 const ERMS_PREFIX = "erms_";
 const ERMS_PATH = "/results-portal";
 const PUBLIC_PATHS = ["/results-portal/login", "/results-portal/logout"];
+const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 const CHANGE_PWD_PATH = "/results-portal/change-password";
 const STATE_ADMIN_BASE = "/results-portal/admin";
 const LGA_ADMIN_BASE = "/results-portal/lga";
@@ -67,6 +68,14 @@ export async function handleResultsRoutes(request) {
   const userId = data?.claims?.sub;
 
   if (!userId) return redirectToLogin(request);
+
+  // Server-side idle timeout: if erms_last_active is set and stale, the session
+  // has been idle for > 15 minutes without a heartbeat — redirect to logout.
+  // If the cookie is absent (e.g. first load after login), allow through.
+  const lastActive = request.cookies.get("erms_last_active")?.value;
+  if (lastActive && Date.now() - Number(lastActive) > IDLE_TIMEOUT) {
+    return NextResponse.redirect(new URL("/results-portal/logout", request.url));
+  }
 
   // ── Fetch ERMS profile from election_admins ───────────────────────────────
   // The Supabase JWT does not carry role/lga/ward/is_active/must_change_password,

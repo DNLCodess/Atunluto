@@ -2,6 +2,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
+const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+
 export async function updateSession(request) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -46,6 +48,19 @@ export async function updateSession(request) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
+  }
+
+  // Authenticated → check server-side idle timeout via last_active cookie.
+  // The cookie is set by POST /api/heartbeat/dashboard every 60 seconds.
+  // If it exists and is stale, the session has been idle for > 15 minutes
+  // server-side — sign out and redirect to login.
+  if (user && isDashboard) {
+    const lastActive = request.cookies.get("dashboard_last_active")?.value;
+    if (lastActive && Date.now() - Number(lastActive) > IDLE_TIMEOUT) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/api/logout/dashboard";
+      return NextResponse.redirect(url);
+    }
   }
 
   // Authenticated → trying to visit login page (back-button guard)

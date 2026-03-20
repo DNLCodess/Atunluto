@@ -81,6 +81,15 @@ export async function loginAction(formData) {
     };
   }
 
+  // Seed the server-side idle-timeout cookie so the middleware can enforce
+  // last_active checks immediately on the first authenticated request.
+  cookieStore.set("dashboard_last_active", String(Date.now()), {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+
   // Session cookie is already set by createServerClient above.
   // Return minimal safe profile data to seed React Query cache.
   return {

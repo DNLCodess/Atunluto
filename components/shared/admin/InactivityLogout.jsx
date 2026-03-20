@@ -2,53 +2,20 @@
 
 /**
  * InactivityLogout — Registration Portal (Dashboard)
- * Logs out after 15 minutes of inactivity.
  *
- * On timeout: navigates to /api/logout/dashboard (GET) which signs out
- * server-side and redirects to /login — no client-side signOut(), so
- * onAuthStateChange never fires and the layout never goes blank.
+ * Mounts all three session-management hooks for the authenticated dashboard:
+ *  - 15-minute inactivity timer → GET /api/logout/dashboard
+ *  - 60-second heartbeat        → POST /api/heartbeat/dashboard
+ *  - Tab/window close beacon    → POST /api/logout/dashboard
  */
 
-import { useEffect, useRef, useCallback } from "react";
-
-const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
-
-const ACTIVITY_EVENTS = [
-  "mousemove",
-  "mousedown",
-  "keydown",
-  "touchstart",
-  "scroll",
-  "click",
-];
+import { useInactivityLogout } from "@/hooks/use-inactivity-logout";
+import { useHeartbeat } from "@/hooks/use-heartbeat";
+import { useTabCloseLogout } from "@/hooks/use-tab-close-logout";
 
 export default function InactivityLogout() {
-  const timerRef = useRef(null);
-  const isLoggingOut = useRef(false);
-
-  const performLogout = useCallback(() => {
-    if (isLoggingOut.current) return;
-    isLoggingOut.current = true;
-    window.location.replace("/api/logout/dashboard");
-  }, []);
-
-  const resetTimer = useCallback(() => {
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(performLogout, IDLE_TIMEOUT);
-  }, [performLogout]);
-
-  useEffect(() => {
-    resetTimer();
-
-    ACTIVITY_EVENTS.forEach((ev) =>
-      window.addEventListener(ev, resetTimer, { passive: true })
-    );
-
-    return () => {
-      clearTimeout(timerRef.current);
-      ACTIVITY_EVENTS.forEach((ev) => window.removeEventListener(ev, resetTimer));
-    };
-  }, [resetTimer]);
-
+  useInactivityLogout("/api/logout/dashboard");
+  useHeartbeat("/api/heartbeat/dashboard");
+  useTabCloseLogout("/api/logout/dashboard");
   return null;
 }
