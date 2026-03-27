@@ -1,27 +1,18 @@
 import { createClient } from "@/supabase/server";
 import { NextResponse } from "next/server";
 
-/**
- * GET /api/logout/dashboard
- * Used by the inactivity timer — browser navigates here directly.
- * Signs out server-side, clears Supabase cookies, redirects to login.
- * No client-side signOut() needed, so onAuthStateChange never fires
- * and the layout never renders null (no blank page).
- */
-export async function GET(request) {
+export async function GET() {
   try {
     const supabase = await createClient();
     await supabase.auth.signOut();
   } catch {
     // best effort
   }
-  return NextResponse.redirect(new URL("/login", request.url));
+  return NextResponse.redirect(
+    new URL("/login", process.env.NEXT_PUBLIC_SITE_URL),
+  );
 }
 
-/**
- * POST /api/logout/dashboard
- * Programmatic logout endpoint for fetch-based callers.
- */
 export async function POST() {
   try {
     const supabase = await createClient();
