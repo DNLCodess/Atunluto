@@ -118,6 +118,17 @@ function LoginForm() {
         clearTimeout(submitTimeoutRef.current);
         submitTimeoutRef.current = null;
       }
+
+      // Deployment mismatch — the server action ID the browser knows about no
+      // longer exists on the current server build (happens when a new deployment
+      // lands while the user has the old page open). Force a hard reload so the
+      // browser fetches the latest bundle; the user can then retry immediately.
+      if (err?.message?.includes("Server Action")) {
+        setError("A newer version of this page is available. Reloading…");
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
+
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);
     }
