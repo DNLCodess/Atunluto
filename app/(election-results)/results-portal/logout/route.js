@@ -18,8 +18,11 @@ async function performSignOut() {
  * Signs out server-side (clears erms_sb-* cookies), redirects to login.
  */
 export async function GET(request) {
-  await performSignOut();
-  return NextResponse.redirect(new URL(LOGIN_URL, request.url));
+  // Redirect immediately — cookies are cleared client-side by the browser
+  // following the 302. The signOut() call invalidates the token server-side
+  // in the background (best effort, non-blocking).
+  performSignOut();
+  return NextResponse.redirect(new URL(LOGIN_URL, request.url), { status: 302 });
 }
 
 /**
