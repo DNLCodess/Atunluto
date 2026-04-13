@@ -2,9 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
-  generateBuildId: async () => {
-    return Date.now().toString();
-  },
   experimental: {
     serverActions: {
       allowedOrigins: ["atunluto.com", "www.atunluto.com"],
