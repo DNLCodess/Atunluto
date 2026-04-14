@@ -241,15 +241,24 @@ export default function LGASetupPage() {
       fd.append("role", key);
       fd.append("lga", selectedLGA);
 
-      const res = await createAdminAccount(fd);
-
-      outcomes.push({
-        role: key,
-        full_name: acc.full_name.trim(),
-        email: acc.email.trim().toLowerCase(),
-        password: res.tempPassword ?? null,
-        error: res.error ?? null,
-      });
+      try {
+        const res = await createAdminAccount(fd);
+        outcomes.push({
+          role: key,
+          full_name: acc.full_name.trim(),
+          email: acc.email.trim().toLowerCase(),
+          password: res.tempPassword ?? null,
+          error: res.error ?? null,
+        });
+      } catch {
+        outcomes.push({
+          role: key,
+          full_name: acc.full_name.trim(),
+          email: acc.email.trim().toLowerCase(),
+          password: null,
+          error: "Something went wrong. Please try again.",
+        });
+      }
     }
 
     setResults(outcomes);

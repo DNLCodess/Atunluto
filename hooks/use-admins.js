@@ -129,8 +129,11 @@ export function useToggleAdminStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ adminId, newStatus }) =>
-      toggleAdminStatus(adminId, newStatus),
+    mutationFn: async ({ adminId, newStatus }) => {
+      const result = await toggleAdminStatus(adminId, newStatus);
+      if (result?.error) throw new Error(result.error);
+      return result;
+    },
     onMutate: async ({ adminId, newStatus }) => {
       await queryClient.cancelQueries({ queryKey: adminKeys.all });
       const snapshot = queryClient.getQueryData(adminKeys.all);
@@ -158,7 +161,11 @@ export function useDeleteAdmin() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (adminId) => deleteAdminAccount(adminId),
+    mutationFn: async (adminId) => {
+      const result = await deleteAdminAccount(adminId);
+      if (result?.error) throw new Error(result.error);
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.all });
     },

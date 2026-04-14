@@ -158,8 +158,8 @@ export default function PUSubmitPage() {
         imagePath,
       });
       setSuccess(result);
-    } catch (err) {
-      setError(err.message);
+    } catch {
+      // submitResult.error?.message has the user-friendly error from the server action
     }
   }
 
@@ -248,9 +248,9 @@ export default function PUSubmitPage() {
         })}
       </div>
 
-      {error && (
+      {(error || submitResult.error?.message) && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mt-5 text-[13px] text-red-800 flex items-center gap-2">
-          <span>⚠️</span> {error}
+          <span>⚠️</span> {error || submitResult.error?.message}
         </div>
       )}
 

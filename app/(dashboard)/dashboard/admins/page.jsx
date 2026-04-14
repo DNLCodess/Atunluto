@@ -122,13 +122,17 @@ function CreateAdminModal({ actor, onClose, onSuccess }) {
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => v && fd.append(k, v));
 
-    const result = await createAdminAccount(fd);
-    setPending(false);
-
-    if (result.error) {
-      setError(result.error);
-    } else {
-      onSuccess(result);
+    try {
+      const result = await createAdminAccount(fd);
+      setPending(false);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        onSuccess(result);
+      }
+    } catch {
+      setPending(false);
+      setError("Something went wrong. Please try again.");
     }
   }
 
@@ -526,7 +530,7 @@ function LGAGroupCard({
 }
 
 // ─── Delete Confirm Modal ─────────────────────────────────────────────────────
-function DeleteConfirmModal({ admin, onConfirm, onClose, pending }) {
+function DeleteConfirmModal({ admin, onConfirm, onClose, pending, error }) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
@@ -543,6 +547,11 @@ function DeleteConfirmModal({ admin, onConfirm, onClose, pending }) {
           </span>
           ? This action cannot be undone.
         </p>
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+            {error}
+          </p>
+        )}
         <div className="flex gap-3">
           <button
             onClick={onClose}
@@ -578,10 +587,15 @@ function CreateStateAdminModal({ onClose, onSuccess }) {
     setError("");
     const fd = new FormData();
     Object.entries(form).forEach(([k, v]) => v && fd.append(k, v));
-    const result = await createStateAdmin(fd);
-    setPending(false);
-    if (result.error) setError(result.error);
-    else onSuccess(result);
+    try {
+      const result = await createStateAdmin(fd);
+      setPending(false);
+      if (result.error) setError(result.error);
+      else onSuccess(result);
+    } catch {
+      setPending(false);
+      setError("Something went wrong. Please try again.");
+    }
   }
 
   return (
@@ -859,8 +873,12 @@ export default function AdminsPage() {
 
   async function handleDelete() {
     if (!deleteTarget) return;
-    const result = await deleteAdmin.mutateAsync(deleteTarget.id);
-    if (!result?.error) setDeleteTarget(null);
+    try {
+      await deleteAdmin.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch {
+      // deleteAdmin.error.message has the user-facing error from the server action
+    }
   }
 
   const canCreate =
@@ -1074,6 +1092,7 @@ export default function AdminsPage() {
           onConfirm={handleDelete}
           onClose={() => setDeleteTarget(null)}
           pending={deleteAdmin.isPending}
+          error={deleteAdmin.error?.message}
         />
       )}
     </div>
