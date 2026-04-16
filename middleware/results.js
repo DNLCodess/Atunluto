@@ -151,5 +151,6 @@ function dashboardForRole(role) {
 function redirectToLogin(request) {
   const loginUrl = new URL("/results-portal/login", request.url);
   loginUrl.searchParams.set("from", request.nextUrl.pathname);
-  return NextResponse.redirect(loginUrl);
+  // 302 converts POST → GET on redirect, preventing a POST to the login page (405).
+  return NextResponse.redirect(loginUrl, { status: 302 });
 }
