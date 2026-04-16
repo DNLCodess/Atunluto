@@ -2,17 +2,20 @@
  * POST /results-portal/api/auth/login
  * ERMS login — replaces the loginResultsAdmin server action.
  *
- * Placed under /results-portal/ so the browser sends erms_sb-* cookies
- * (which are path-scoped to /results-portal) on all subsequent API calls.
+ * Uses request.cookies for reading and response.cookies.set() for writing
+ * so that session tokens are reliably attached to the outgoing response.
  *
  * Returns { success, redirect } on success or { error } on failure.
  * Client handles the redirect via router.push().
  */
 
+import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/supabase/admin";
-import { createErmsClient } from "@/supabase/erms-server";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+
+const ERMS_PREFIX = "erms_";
+const ERMS_PATH = "/results-portal";
 
 async function logAuthEvent(supabase, adminId, action, ipAddress, userAgent, notes = null) {
   try {
@@ -67,8 +70,31 @@ export async function POST(request) {
     );
   }
 
-  // Authenticate via Supabase Auth — sets erms_sb-* session cookies
-  const ermsClient = await createErmsClient();
+  // Collect cookies that Supabase wants to write after signIn.
+  // We must NOT use createErmsClient() here because its setAll callback
+  // calls cookieStore.set() from next/headers, which is not reliable in
+  // Route Handlers. Instead we build the client inline and capture cookies
+  // into pendingCookies, then apply them to the NextResponse object.
+  let pendingCookies = [];
+
+  const ermsClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies
+            .getAll()
+            .filter((c) => c.name.startsWith(ERMS_PREFIX))
+            .map((c) => ({ name: c.name.slice(ERMS_PREFIX.length), value: c.value }));
+        },
+        setAll(cookiesToSet) {
+          pendingCookies = cookiesToSet;
+        },
+      },
+    },
+  );
+
   const { error: signInError } = await ermsClient.auth.signInWithPassword({ email, password });
 
   if (signInError) {
@@ -76,7 +102,52 @@ export async function POST(request) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   }
 
-  // Update last_login (non-fatal)
+  // Determine redirect destination
+  const isSafe =
+    from &&
+    from.startsWith("/results-portal/") &&
+    !from.includes("//") &&
+    !from.startsWith("/results-portal/login");
+
+  const roleDest =
+    admin.role === "state_admin"
+      ? "/results-portal/admin"
+      : admin.role === "polling_unit_admin"
+        ? "/results-portal/pu"
+        : "/results-portal/lga";
+
+  const redirect = admin.must_change_password
+    ? "/results-portal/change-password"
+    : isSafe
+      ? from
+      : roleDest;
+
+  // Build the response first, then attach cookies to it
+  const response = NextResponse.json({ success: true, redirect });
+
+  // Apply Supabase session cookies with ERMS prefix and path scoping
+  pendingCookies.forEach(({ name, value, options = {} }) => {
+    const { maxAge, expires, ...rest } = options;
+    const isRemoval = maxAge === 0;
+    response.cookies.set(ERMS_PREFIX + name, value, {
+      ...rest,
+      ...(isRemoval ? { maxAge: 0 } : {}),
+      path: ERMS_PATH,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+  });
+
+  // Seed the server-side idle-timeout cookie
+  response.cookies.set("erms_last_active", String(Date.now()), {
+    path: ERMS_PATH,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  // Non-fatal side effects (fire and forget)
   supabase
     .from("election_admins")
     .update({ last_login: new Date().toISOString() })
@@ -86,37 +157,5 @@ export async function POST(request) {
 
   await logAuthEvent(supabase, admin.id, "LOGIN_SUCCESS", ipAddress, userAgent);
 
-  // Seed the server-side idle-timeout cookie
-  const cookieStore = await cookies();
-  cookieStore.set("erms_last_active", String(Date.now()), {
-    path: "/results-portal",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-  });
-
-  if (admin.must_change_password) {
-    return NextResponse.json({
-      success: true,
-      redirect: "/results-portal/change-password",
-    });
-  }
-
-  const roleDest =
-    admin.role === "state_admin"
-      ? "/results-portal/admin"
-      : admin.role === "polling_unit_admin"
-        ? "/results-portal/pu"
-        : "/results-portal/lga";
-
-  const isSafe =
-    from &&
-    from.startsWith("/results-portal/") &&
-    !from.includes("//") &&
-    !from.startsWith("/results-portal/login");
-
-  return NextResponse.json({
-    success: true,
-    redirect: isSafe ? from : roleDest,
-  });
+  return response;
 }

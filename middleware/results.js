@@ -5,6 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 const ERMS_PREFIX = "erms_";
 const ERMS_PATH = "/results-portal";
 const PUBLIC_PATHS = ["/results-portal/login", "/results-portal/logout"];
+// API routes handle their own authentication — never redirect them to the login page.
+const API_PREFIX = "/results-portal/api/";
 const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 const CHANGE_PWD_PATH = "/results-portal/change-password";
 const STATE_ADMIN_BASE = "/results-portal/admin";
@@ -19,6 +21,9 @@ export async function handleResultsRoutes(request) {
   // Public paths — no session required
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "?")))
     return NextResponse.next();
+
+  // API routes manage their own auth — let them through without a redirect
+  if (pathname.startsWith(API_PREFIX)) return NextResponse.next();
 
   // ── ERMS-namespaced Supabase client ───────────────────────────────────────
   // Reads erms_sb-* cookies (strips prefix for the SDK), writes refreshed

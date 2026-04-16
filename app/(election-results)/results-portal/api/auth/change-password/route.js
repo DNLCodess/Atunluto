@@ -2,15 +2,21 @@
  * POST /results-portal/api/auth/change-password
  * Replaces the changeResultsPassword server action.
  * Returns { success, redirect } on success or { error } on failure.
+ *
+ * Uses request.cookies + response.cookies.set() so updated session tokens
+ * are reliably attached to the outgoing response.
  */
 
+import { createServerClient } from "@supabase/ssr";
 import { createAdminClient } from "@/supabase/admin";
-import { createErmsClient } from "@/supabase/erms-server";
 import { createClient } from "@supabase/supabase-js";
 import { getResultsSession } from "@/lib/erms-session";
 import { validatePasswordStrength } from "@/utils/password-generator";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+
+const ERMS_PREFIX = "erms_";
+const ERMS_PATH = "/results-portal";
 
 export async function POST(request) {
   const body = await request.json().catch(() => ({}));
@@ -68,7 +74,27 @@ export async function POST(request) {
     }
   }
 
-  const ermsClient = await createErmsClient();
+  // Build ERMS client that captures cookies to apply to the response
+  let pendingCookies = [];
+
+  const ermsClient = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies
+            .getAll()
+            .filter((c) => c.name.startsWith(ERMS_PREFIX))
+            .map((c) => ({ name: c.name.slice(ERMS_PREFIX.length), value: c.value }));
+        },
+        setAll(cookiesToSet) {
+          pendingCookies = cookiesToSet;
+        },
+      },
+    },
+  );
+
   const { error: updateError } = await ermsClient.auth.updateUser({ password: new_password });
 
   if (updateError) {
@@ -95,15 +121,31 @@ export async function POST(request) {
     // non-fatal
   }
 
-  if (session.must_change_password) {
-    const dest =
-      session.role === "state_admin"
-        ? "/results-portal/admin"
-        : session.role === "polling_unit_admin"
-          ? "/results-portal/pu"
-          : "/results-portal/lga";
-    return NextResponse.json({ success: true, redirect: dest });
-  }
+  const dest =
+    session.role === "state_admin"
+      ? "/results-portal/admin"
+      : session.role === "polling_unit_admin"
+        ? "/results-portal/pu"
+        : "/results-portal/lga";
 
-  return NextResponse.json({ success: true });
+  const response = NextResponse.json({
+    success: true,
+    ...(session.must_change_password ? { redirect: dest } : {}),
+  });
+
+  // Apply any refreshed session cookies to the response
+  pendingCookies.forEach(({ name, value, options = {} }) => {
+    const { maxAge, expires, ...rest } = options;
+    const isRemoval = maxAge === 0;
+    response.cookies.set(ERMS_PREFIX + name, value, {
+      ...rest,
+      ...(isRemoval ? { maxAge: 0 } : {}),
+      path: ERMS_PATH,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+  });
+
+  return response;
 }
