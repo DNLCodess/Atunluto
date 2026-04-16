@@ -6,7 +6,6 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import Image from "next/image";
-import { logoutResultsAdmin } from "@/app/actions/election-auth";
 import LGASidebarNav from "./sidebar";
 import ERMSInactivityLogout from "@/components/election-results/InactivityLogout";
 
@@ -98,15 +97,13 @@ export default async function LGALayout({ children }) {
         {/* Footer — logout */}
         <div className="px-4 py-5 shrink-0">
           <div className="mx-2 border-t border-white/10 mb-4" />
-          <form action={logoutResultsAdmin}>
-            <button
-              type="submit"
-              className="w-full py-2.5 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/65 hover:text-white border border-white/15 hover:border-white/25 rounded-xl text-[13px] font-semibold cursor-pointer transition-all duration-150"
-            >
-              <span className="text-sm">↩</span>
-              Sign Out
-            </button>
-          </form>
+          <a
+            href="/results-portal/logout"
+            className="w-full py-2.5 flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white/65 hover:text-white border border-white/15 hover:border-white/25 rounded-xl text-[13px] font-semibold cursor-pointer transition-all duration-150 no-underline"
+          >
+            <span className="text-sm">↩</span>
+            Sign Out
+          </a>
           <p className="text-center text-white/25 text-[10px] mt-3 tracking-wide">
             Oyo South Senatorial District
           </p>
