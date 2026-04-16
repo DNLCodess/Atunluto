@@ -5,21 +5,19 @@ import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Shield, CheckCircle2 } from "lucide-react";
-import {
-  loginResultsAdmin,
-  getResultsSession,
-} from "@/app/actions/election-auth";
-
 const TRUST_POINTS = [
   "End-to-end encrypted result submissions",
   "Tamper-evident SHA-256 checksums",
   "Real-time collation across 9 LGAs",
 ];
 
-// ── Session check with hard timeout so it never hangs forever ──
+// ── Session check via API route — no server action needed ──
 async function checkSessionWithTimeout(timeoutMs = 5000) {
   return Promise.race([
-    getResultsSession(),
+    fetch("/results-portal/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => d?.session ?? null)
+      .catch(() => null),
     new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
   ]);
 }
@@ -78,7 +76,7 @@ function LoginForm() {
     setLoading(true);
     setError("");
 
-    // Hard timeout — if the server action hangs for >15s, unblock the UI
+    // Hard timeout — unblock UI if request hangs >15s
     submitTimeoutRef.current = setTimeout(() => {
       setLoading(false);
       setError(
@@ -88,47 +86,44 @@ function LoginForm() {
 
     try {
       const formData = new FormData(e.currentTarget);
-      const result = await loginResultsAdmin(formData);
+      const res = await fetch("/results-portal/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.get("email"),
+          password: formData.get("password"),
+          from: from || undefined,
+        }),
+      });
 
-      // Clear the timeout — action returned in time
       if (submitTimeoutRef.current) {
         clearTimeout(submitTimeoutRef.current);
         submitTimeoutRef.current = null;
       }
 
-      if (result?.error) {
-        setError(result.error);
+      const data = await res.json();
+
+      if (!res.ok || data?.error) {
+        setError(data?.error || "Login failed. Please try again.");
         setLoading(false);
+        return;
       }
-      // On success, the server action redirects — loading stays true briefly
-      // until navigation completes, which is the correct UX.
-      // If redirect doesn't fire within 5s, unblock the button as a fallback.
-      else if (!result?.error) {
+
+      // API route returns { success, redirect } — navigate client-side
+      if (data?.redirect) {
+        router.push(data.redirect);
+        // Keep loading=true while navigation completes (correct UX).
+        // Fallback: unblock after 5s in case navigation stalls.
         submitTimeoutRef.current = setTimeout(() => {
           setLoading(false);
           setError("Redirect failed. Please refresh and try again.");
         }, 5000);
       }
-    } catch (err) {
-      // Next.js redirect() throws a NEXT_REDIRECT error to trigger navigation —
-      // it is not a real failure, so silently let the navigation proceed.
-      if (err?.digest?.startsWith("NEXT_REDIRECT")) return;
-
+    } catch {
       if (submitTimeoutRef.current) {
         clearTimeout(submitTimeoutRef.current);
         submitTimeoutRef.current = null;
       }
-
-      // Deployment mismatch — the server action ID the browser knows about no
-      // longer exists on the current server build (happens when a new deployment
-      // lands while the user has the old page open). Force a hard reload so the
-      // browser fetches the latest bundle; the user can then retry immediately.
-      if (err?.message?.includes("Server Action")) {
-        setError("A newer version of this page is available. Reloading…");
-        setTimeout(() => window.location.reload(), 1500);
-        return;
-      }
-
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);
     }

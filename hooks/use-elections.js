@@ -2,24 +2,28 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchElections, fetchCandidates } from "@/app/actions/elections";
+
+const BASE = "/results-portal/api/elections";
 
 const ELECTIONS_KEY = ["elections"];
 const CANDIDATES_KEY = (electionId) => ["candidates", electionId];
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok || data?.error) throw new Error(data?.error || "Request failed.");
+  return data;
+}
 
 // ─── Elections ────────────────────────────────────────────────────────────────
 
 export function useElections() {
   return useQuery({
     queryKey: ELECTIONS_KEY,
-    queryFn: async () => {
-      const data = await fetchElections();
-      // Server actions return { error } on auth failure rather than throwing —
-      // we need to throw here so React Query puts the hook into error state
-      // instead of returning the error object as successful data.
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
+    queryFn: () => apiFetch(BASE),
     staleTime: 60_000,
   });
 }
@@ -27,12 +31,8 @@ export function useElections() {
 export function useCreateElection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload) => {
-      const { registerElection } = await import("@/app/actions/elections");
-      const result = await registerElection(payload);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: (payload) =>
+      apiFetch(BASE, { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ELECTIONS_KEY }),
   });
 }
@@ -40,12 +40,11 @@ export function useCreateElection() {
 export function useUpdateElectionStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ electionId, status }) => {
-      const { updateElectionStatus } = await import("@/app/actions/elections");
-      const result = await updateElectionStatus(electionId, status);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: ({ electionId, status }) =>
+      apiFetch(`${BASE}/${electionId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "update-status", status }),
+      }),
     onMutate: async ({ electionId, status }) => {
       await queryClient.cancelQueries({ queryKey: ELECTIONS_KEY });
       const previous = queryClient.getQueryData(ELECTIONS_KEY);
@@ -63,12 +62,11 @@ export function useUpdateElectionStatus() {
 export function useToggleElectionPublic() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ electionId, isPublic }) => {
-      const { toggleElectionPublic } = await import("@/app/actions/elections");
-      const result = await toggleElectionPublic(electionId, isPublic);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: ({ electionId, isPublic }) =>
+      apiFetch(`${BASE}/${electionId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "toggle-public", is_public: isPublic }),
+      }),
     onMutate: async ({ electionId, isPublic }) => {
       await queryClient.cancelQueries({ queryKey: ELECTIONS_KEY });
       const previous = queryClient.getQueryData(ELECTIONS_KEY);
@@ -90,11 +88,7 @@ export function useToggleElectionPublic() {
 export function useCandidates(electionId) {
   return useQuery({
     queryKey: CANDIDATES_KEY(electionId),
-    queryFn: async () => {
-      const data = await fetchCandidates(electionId);
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
+    queryFn: () => apiFetch(`${BASE}/${electionId}/candidates`),
     enabled: !!electionId,
     staleTime: 60_000,
   });
@@ -103,12 +97,11 @@ export function useCandidates(electionId) {
 export function useAddCandidate() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload) => {
-      const { addCandidate } = await import("@/app/actions/elections");
-      const result = await addCandidate(payload);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: ({ electionId, ...payload }) =>
+      apiFetch(`${BASE}/${electionId}/candidates`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({
         queryKey: CANDIDATES_KEY(vars.electionId),
@@ -120,12 +113,10 @@ export function useAddCandidate() {
 export function useDeleteCandidate() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ candidateId }) => {
-      const { deleteCandidate } = await import("@/app/actions/elections");
-      const result = await deleteCandidate(candidateId);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: ({ electionId, candidateId }) =>
+      apiFetch(`${BASE}/${electionId}/candidates/${candidateId}`, {
+        method: "DELETE",
+      }),
     onMutate: async ({ candidateId, electionId }) => {
       await queryClient.cancelQueries({ queryKey: CANDIDATES_KEY(electionId) });
       const previous = queryClient.getQueryData(CANDIDATES_KEY(electionId));

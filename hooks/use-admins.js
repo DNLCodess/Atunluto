@@ -2,9 +2,9 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/supabase/client";
-import { toggleAdminStatus, deleteAdminAccount } from "@/app/actions/admins";
 
 const supabase = createClient();
+const ADMINS_API = "/api/dashboard/admins";
 
 // ─── Keys ─────────────────────────────────────────────────────────────────────
 export const adminKeys = {
@@ -13,6 +13,16 @@ export const adminKeys = {
   byLGA: (lga) => ["admins", "lga", lga],
   stats: () => ["admins", "stats"],
 };
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok || data?.error) throw new Error(data?.error || "Request failed.");
+  return data;
+}
 
 // ─── Fetch current actor info ──────────────────────────────────────────────────
 export function useCurrentAdmin() {
@@ -38,7 +48,7 @@ export function useCurrentAdmin() {
   });
 }
 
-// ─── Fetch all admins (scoped) ────────────────────────────────────────────────
+// ─── Fetch all admins (scoped by role — client-side Supabase for reads) ───────
 export function useAdmins(filters = {}) {
   const { data: actor } = useCurrentAdmin();
 
@@ -52,17 +62,14 @@ export function useAdmins(filters = {}) {
       let query = supabase
         .from("admins")
         .select(
-          `
-          id, email, full_name, role, lga, phone,
-          is_active, created_at, last_login, created_by,
-          creator:created_by(full_name, role)
-        `,
+          `id, email, full_name, role, lga, phone,
+           is_active, created_at, last_login, created_by,
+           creator:created_by(full_name, role)`,
         )
         .order("lga", { ascending: true })
         .order("role", { ascending: true })
         .order("created_at", { ascending: false });
 
-      // Scope based on actor role
       if (actor?.role === "super_user") {
         query = query.eq("lga", actor.lga).neq("role", "state_admin");
       } else if (actor?.role === "administrator") {
@@ -73,7 +80,6 @@ export function useAdmins(filters = {}) {
         return [];
       }
 
-      // Additional filters
       if (filters.lga) query = query.eq("lga", filters.lga);
       if (filters.role) query = query.eq("role", filters.role);
       if (filters.is_active !== undefined)
@@ -93,7 +99,7 @@ export function useAdmins(filters = {}) {
   });
 }
 
-// ─── Admin stats per LGA (state_admin only) ───────────────────────────────────
+// ─── Admin stats per LGA ─────────────────────────────────────────────────────
 export function useAdminStats() {
   const { data: actor } = useCurrentAdmin();
 
@@ -105,7 +111,6 @@ export function useAdminStats() {
         .select("role, lga, is_active");
       if (error) throw error;
 
-      // Group by LGA
       const byLGA = {};
       data.forEach((a) => {
         if (!a.lga) return;
@@ -129,11 +134,11 @@ export function useToggleAdminStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ adminId, newStatus }) => {
-      const result = await toggleAdminStatus(adminId, newStatus);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: ({ adminId, newStatus }) =>
+      apiFetch(`${ADMINS_API}/${adminId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ newStatus }),
+      }),
     onMutate: async ({ adminId, newStatus }) => {
       await queryClient.cancelQueries({ queryKey: adminKeys.all });
       const snapshot = queryClient.getQueryData(adminKeys.all);
@@ -161,18 +166,15 @@ export function useDeleteAdmin() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (adminId) => {
-      const result = await deleteAdminAccount(adminId);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: (adminId) =>
+      apiFetch(`${ADMINS_API}/${adminId}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.all });
     },
   });
 }
 
-// ─── Member collation hooks ───────────────────────────────────────────────────
+// ─── Member collation hooks (direct Supabase reads — no server action needed) ─
 
 export function useMemberCollationByLGA() {
   const { data: actor } = useCurrentAdmin();
@@ -191,12 +193,10 @@ export function useMemberCollationByLGA() {
       ) {
         query = query.eq("lga", actor.lga);
       }
-      // state_admin gets all
 
       const { data, error } = await query;
       if (error) throw error;
 
-      // Aggregate by LGA → ward
       const byLGA = {};
       data.forEach((m) => {
         if (!byLGA[m.lga]) {
@@ -217,7 +217,6 @@ export function useMemberCollationByLGA() {
         else if (m.gender === "female") l.female += 1;
         else l.other += 1;
 
-        // Ward aggregation
         if (!l.byWard[m.ward]) {
           l.byWard[m.ward] = { total: 0, male: 0, female: 0, other: 0 };
         }
@@ -227,8 +226,7 @@ export function useMemberCollationByLGA() {
         else if (m.gender === "female") w.female += 1;
         else w.other += 1;
 
-        // Monthly trend
-        const month = m.created_at?.slice(0, 7); // YYYY-MM
+        const month = m.created_at?.slice(0, 7);
         if (month) {
           l.monthlyTrend[month] = (l.monthlyTrend[month] || 0) + 1;
         }

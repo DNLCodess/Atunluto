@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { changeResultsPassword } from "@/app/actions/election-auth";
+import { useRouter } from "next/navigation";
 
 const REQUIREMENTS = [
   { test: (p) => p.length >= 8, label: "At least 8 characters" },
@@ -21,6 +21,7 @@ const REQUIREMENTS = [
 ];
 
 export default function ChangePasswordPage() {
+  const router = useRouter();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -37,13 +38,25 @@ export default function ChangePasswordPage() {
     setLoading(true);
     setError("");
 
-    const formData = new FormData();
-    formData.set("new_password", newPassword);
-    formData.set("confirm_password", confirmPassword);
+    try {
+      const res = await fetch("/results-portal/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
+      });
+      const result = await res.json();
 
-    const result = await changeResultsPassword(formData);
-    if (result?.error) {
-      setError(result.error);
+      if (!res.ok || result?.error) {
+        setError(result?.error || "Failed to update password. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      if (result?.redirect) {
+        router.push(result.redirect);
+      }
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
       setLoading(false);
     }
   }

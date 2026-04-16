@@ -1,29 +1,28 @@
 /**
- * lib/hooks/use-election-results.js
- * React Query hooks for result submission and LGA Admin result viewing.
- * All data fetching delegated to server actions — no Supabase client in browser.
- *
- * NOTE: Ward and polling unit dropdowns must use useWardsForLGA and
- * usePollingUnitsForWard from @/hooks/use-pu — NOT useLGAWards (deleted).
+ * hooks/use-election-results.js
+ * React Query hooks for result submission and result viewing.
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  fetchActiveElections,
-  fetchElectionCandidates,
-  fetchMyResults,
-} from "@/app/actions/results-fetch";
+
+const BASE = "/results-portal/api/results";
+
+async function apiFetch(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok || data?.error) throw new Error(data?.error || "Request failed.");
+  return data;
+}
 
 // ─── Active Elections ─────────────────────────────────────────────────────────
 
 export function useActiveElections() {
   return useQuery({
     queryKey: ["active-elections"],
-    queryFn: async () => {
-      const data = await fetchActiveElections();
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
+    queryFn: () => apiFetch(`${BASE}/active`),
     staleTime: 60_000,
   });
 }
@@ -33,11 +32,8 @@ export function useActiveElections() {
 export function useElectionCandidates(electionId) {
   return useQuery({
     queryKey: ["election-candidates", electionId],
-    queryFn: async () => {
-      const data = await fetchElectionCandidates(electionId);
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
+    queryFn: () =>
+      apiFetch(`${BASE}/candidates?electionId=${encodeURIComponent(electionId)}`),
     enabled: !!electionId,
     staleTime: 120_000,
   });
@@ -48,10 +44,10 @@ export function useElectionCandidates(electionId) {
 export function useMyResults(adminId, electionId) {
   return useQuery({
     queryKey: ["my-results", adminId, electionId],
-    queryFn: async () => {
-      const data = await fetchMyResults(adminId, electionId);
-      if (data?.error) throw new Error(data.error);
-      return data;
+    queryFn: () => {
+      const params = new URLSearchParams({ adminId });
+      if (electionId) params.set("electionId", electionId);
+      return apiFetch(`${BASE}/mine?${params}`);
     },
     enabled: !!adminId,
     staleTime: 30_000,
@@ -63,13 +59,8 @@ export function useMyResults(adminId, electionId) {
 export function useSubmitResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload) => {
-      const { submitElectionResult } =
-        await import("@/app/actions/result-submission");
-      const result = await submitElectionResult(payload);
-      if (result?.error) throw new Error(result.error);
-      return result;
-    },
+    mutationFn: (payload) =>
+      apiFetch(BASE, { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-results"] });
     },
