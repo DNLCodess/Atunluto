@@ -3,6 +3,20 @@ import { NextResponse } from "next/server";
 
 const LOGIN_URL = "/results-portal/login";
 
+function getPublicOrigin(request) {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  }
+  const host =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    new URL(request.url).host;
+  const proto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0].trim() ||
+    new URL(request.url).protocol.replace(":", "");
+  return `${proto}://${host}`;
+}
+
 async function performSignOut() {
   try {
     const supabase = await createErmsClient();
@@ -22,7 +36,7 @@ export async function GET(request) {
   // following the 302. The signOut() call invalidates the token server-side
   // in the background (best effort, non-blocking).
   performSignOut();
-  return NextResponse.redirect(new URL(LOGIN_URL, request.url), { status: 302 });
+  return NextResponse.redirect(new URL(LOGIN_URL, getPublicOrigin(request)), { status: 302 });
 }
 
 /**

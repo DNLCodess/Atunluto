@@ -79,7 +79,7 @@ export async function handleResultsRoutes(request) {
   // If the cookie is absent (e.g. first load after login), allow through.
   const lastActive = request.cookies.get("erms_last_active")?.value;
   if (lastActive && Date.now() - Number(lastActive) > IDLE_TIMEOUT) {
-    return NextResponse.redirect(new URL("/results-portal/logout", request.url));
+    return NextResponse.redirect(new URL("/results-portal/logout", getPublicOrigin(request)));
   }
 
   // ── Fetch ERMS profile from election_admins ───────────────────────────────
@@ -102,33 +102,24 @@ export async function handleResultsRoutes(request) {
   if (!admin || !admin.is_active) return redirectToLogin(request);
 
   // Force password change before any protected page
+  const origin = getPublicOrigin(request);
+
   if (admin.must_change_password && pathname !== CHANGE_PWD_PATH)
-    return NextResponse.redirect(new URL(CHANGE_PWD_PATH, request.url));
+    return NextResponse.redirect(new URL(CHANGE_PWD_PATH, origin));
 
   // ── Role-based route guards ───────────────────────────────────────────────
   if (pathname.startsWith(STATE_ADMIN_BASE) && admin.role !== "state_admin")
-    return NextResponse.redirect(
-      new URL(dashboardForRole(admin.role), request.url),
-    );
+    return NextResponse.redirect(new URL(dashboardForRole(admin.role), origin));
 
   if (pathname.startsWith(LGA_ADMIN_BASE) && admin.role !== "lga_admin")
-    return NextResponse.redirect(
-      new URL(dashboardForRole(admin.role), request.url),
-    );
+    return NextResponse.redirect(new URL(dashboardForRole(admin.role), origin));
 
-  if (
-    pathname.startsWith(PU_ADMIN_BASE) &&
-    admin.role !== "polling_unit_admin"
-  )
-    return NextResponse.redirect(
-      new URL(dashboardForRole(admin.role), request.url),
-    );
+  if (pathname.startsWith(PU_ADMIN_BASE) && admin.role !== "polling_unit_admin")
+    return NextResponse.redirect(new URL(dashboardForRole(admin.role), origin));
 
   // Root redirect
   if (pathname === "/results-portal" || pathname === "/results-portal/")
-    return NextResponse.redirect(
-      new URL(dashboardForRole(admin.role), request.url),
-    );
+    return NextResponse.redirect(new URL(dashboardForRole(admin.role), origin));
 
   // ── Inject session context into response headers ──────────────────────────
   // Server-component layouts read these to display user info without a DB call.
@@ -148,8 +139,22 @@ function dashboardForRole(role) {
   return "/results-portal/pu";
 }
 
+function getPublicOrigin(request) {
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+  }
+  const host =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    new URL(request.url).host;
+  const proto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0].trim() ||
+    new URL(request.url).protocol.replace(":", "");
+  return `${proto}://${host}`;
+}
+
 function redirectToLogin(request) {
-  const loginUrl = new URL("/results-portal/login", request.url);
+  const loginUrl = new URL("/results-portal/login", getPublicOrigin(request));
   loginUrl.searchParams.set("from", request.nextUrl.pathname);
   // 302 converts POST → GET on redirect, preventing a POST to the login page (405).
   return NextResponse.redirect(loginUrl, { status: 302 });
