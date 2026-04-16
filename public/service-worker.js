@@ -1,5 +1,5 @@
 // Service Worker for Atunluto Group PWA
-const CACHE_NAME = "atunluto-v5";
+const CACHE_NAME = "atunluto-v6";
 const OFFLINE_URL = "/offline";
 
 // Files to cache on install (REMOVED /admin routes)
@@ -66,6 +66,8 @@ self.addEventListener("fetch", (event) => {
   const shouldSkipCache =
     url.pathname.startsWith("/dashboard") || // All admin pages
     url.pathname.startsWith("/login") || // Login page
+    url.pathname.startsWith("/results-portal") || // ERMS portal (all pages + API)
+    url.pathname.startsWith("/_next/") || // Next.js chunks — already immutably cached by the browser; never re-cache here or stale chunks break the app after deployments
     url.pathname.includes("/api/") || // API routes
     url.pathname.includes("supabase") || // Supabase requests
     event.request.method !== "GET"; // Non-GET requests
