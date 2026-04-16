@@ -2,6 +2,7 @@
 import "./globals.css";
 import { Montserrat, Poppins } from "next/font/google";
 import QueryProvider from "@/components/common/QueryProvider";
+import ServiceWorkerUpdater from "@/components/common/ServiceWorkerUpdater";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -99,15 +100,7 @@ export default function RootLayout({ children }) {
         className={`${montserrat.variable} ${poppins.variable} antialiased`}
       >
         <QueryProvider>
-          {/*
-           * LGAPrefetcher fires prefetchAllLGAWards() once on app mount.
-           * It fetches ward lists for all 9 LGAs in parallel (≤108 rows total)
-           * and loads them into the React Query cache with a 24-hour staleTime.
-           * This means the Ward dropdown in the registration form (and anywhere
-           * else across the app) will always resolve from cache with zero latency.
-           * The component renders nothing visible — it is purely a side-effect runner.
-           */}
-
+          <ServiceWorkerUpdater />
           {children}
         </QueryProvider>
       </body>
