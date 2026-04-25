@@ -16,7 +16,6 @@ import {
   usePollingUnitsForWard,
   prefetchPollingUnits,
 } from "@/hooks/use-pu";
-import { createClient } from "@/supabase/client";
 import MembershipCardDownload from "@/components/common/membership-card-download";
 
 // ─── Shared spinner ───────────────────────────────────────────────────────────
@@ -105,7 +104,6 @@ export default function MemberRegistrationForm({
   const [successData, setSuccessData] = useState(null);
 
   const fileInputRef = useRef(null);
-  const supabase = createClient();
 
   // ── Cascading dropdown data (from DB) ─────────────────────────────────────
 
@@ -173,17 +171,26 @@ export default function MemberRegistrationForm({
     setUploadedImageUrl(null);
     setImageUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const res = await fetch(
-        `/api/admin/public-upload-url?lga=${encodeURIComponent(form.lga || "public")}&ext=${ext}`,
+      const lga = encodeURIComponent(form.lga || "public");
+      const sigRes = await fetch(`/api/public-cloudinary-sign?lga=${lga}`);
+      if (!sigRes.ok) throw new Error("Failed to get upload signature");
+      const { signature, timestamp, folder, cloudName, apiKey } =
+        await sigRes.json();
+
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("api_key", apiKey);
+      fd.append("timestamp", String(timestamp));
+      fd.append("signature", signature);
+      fd.append("folder", folder);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: "POST", body: fd },
       );
-      if (!res.ok) throw new Error("Failed to get upload URL");
-      const { token, path, publicUrl } = await res.json();
-      const { error: uploadErr } = await supabase.storage
-        .from("members-images")
-        .uploadToSignedUrl(path, token, file, { contentType: file.type });
-      if (uploadErr) throw uploadErr;
-      setUploadedImageUrl(publicUrl);
+      if (!uploadRes.ok) throw new Error("Image upload failed");
+      const uploadData = await uploadRes.json();
+      setUploadedImageUrl(uploadData.secure_url);
     } catch {
       setErrors((prev) => ({
         ...prev,

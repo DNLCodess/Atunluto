@@ -97,41 +97,48 @@ export default function EditMemberModal({ member, onClose, onUpdate }) {
 
       // Upload new image if selected
       if (profileImage) {
-        const fileExt = profileImage.name.split(".").pop();
-        const fileName = `${Date.now()}-${Math.random()
-          .toString(36)
-          .substring(7)}.${fileExt}`;
-        const filePath = `${formData.lga}/${fileName}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from("members-images")
-          .upload(filePath, profileImage, {
-            contentType: profileImage.type,
-            upsert: false,
-          });
-
-        if (uploadError) {
-          console.error("Image upload error:", uploadError);
-          alert("Failed to upload image: " + uploadError.message);
+        const sigRes = await fetch(
+          `/api/cloudinary-sign?lga=${encodeURIComponent(formData.lga)}`,
+        );
+        if (!sigRes.ok) {
+          alert("Failed to get upload signature");
           setSaving(false);
           return;
         }
+        const { signature, timestamp, folder, cloudName, apiKey } =
+          await sigRes.json();
 
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from("members-images")
-          .getPublicUrl(filePath);
+        const fd = new FormData();
+        fd.append("file", profileImage);
+        fd.append("api_key", apiKey);
+        fd.append("timestamp", String(timestamp));
+        fd.append("signature", signature);
+        fd.append("folder", folder);
 
-        profile_image_url = urlData.publicUrl;
+        const uploadRes = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          { method: "POST", body: fd },
+        );
+        if (!uploadRes.ok) {
+          alert("Failed to upload image");
+          setSaving(false);
+          return;
+        }
+        const uploadData = await uploadRes.json();
+        profile_image_url = uploadData.secure_url;
 
-        // Delete old image if it exists
-        if (member.profile_image_url) {
+        // Remove old Supabase image if present (best-effort, ignore failure)
+        if (
+          member.profile_image_url?.includes("supabase.co")
+        ) {
           try {
-            const oldFilePath =
+            const oldPath =
               member.profile_image_url.split("/members-images/")[1];
-            await supabase.storage.from("members-images").remove([oldFilePath]);
-          } catch (err) {
-            console.warn("Failed to delete old image:", err);
+            if (oldPath) {
+              await supabase.storage.from("members-images").remove([oldPath]);
+            }
+          } catch {
+            // non-critical
           }
         }
       }
