@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function MembershipCardPrinter({ member, onClose }) {
   const canvasRef = useRef(null);
   const [cardImage, setCardImage] = useState(null);
+  const [profilePhoto, setProfilePhoto] = useState(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
@@ -26,6 +27,7 @@ export default function MembershipCardPrinter({ member, onClose }) {
 
   // DEFAULT CONFIGURATION - Optimized and finalized
   const DEFAULT_CONFIG = {
+    photo: { x: 65.4, y: 3.5, width: 27.3, height: 23.1 },
     name: {
       x: 21,
       y: 34.2,
@@ -96,20 +98,30 @@ export default function MembershipCardPrinter({ member, onClose }) {
     img.onload = () => {
       setCardImage(img);
       setImageLoaded(true);
-      drawCard(img);
     };
-    img.onerror = () => {
-      console.error("Failed to load card image");
-    };
+    img.onerror = () => console.error("Failed to load card image");
     img.src = "/card.png";
   }, []);
 
-  // Redraw when config or member changes
+  // Load profile photo with crossOrigin so canvas export works
+  useEffect(() => {
+    if (!member.profile_image_url) {
+      setProfilePhoto(null);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => setProfilePhoto(img);
+    img.onerror = () => setProfilePhoto(null);
+    img.src = member.profile_image_url;
+  }, [member.profile_image_url]);
+
+  // Redraw when card bg, photo, config, or member data changes
   useEffect(() => {
     if (imageLoaded && cardImage) {
       drawCard(cardImage);
     }
-  }, [imageLoaded, cardImage, member, config]);
+  }, [imageLoaded, cardImage, profilePhoto, member, config]);
 
   const drawCard = (img) => {
     const canvas = canvasRef.current;
@@ -125,10 +137,25 @@ export default function MembershipCardPrinter({ member, onClose }) {
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.textBaseline = "top";
 
     const w = img.width;
     const h = img.height;
+
+    // Draw profile photo if loaded
+    if (profilePhoto && config.photo) {
+      const px = (config.photo.x / 100) * w;
+      const py = (config.photo.y / 100) * h;
+      const pw = (config.photo.width / 100) * w;
+      const ph = (config.photo.height / 100) * h;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(px, py, pw, ph);
+      ctx.clip();
+      ctx.drawImage(profilePhoto, px, py, pw, ph);
+      ctx.restore();
+    }
+
+    ctx.textBaseline = "top";
 
     // Helper to draw text with wrapping
     const drawText = (text, fieldConfig) => {
@@ -421,9 +448,37 @@ const DEFAULT_CONFIG = ${JSON.stringify(config, null, 2)};`;
                           ? "Polling Unit"
                           : field === "cardNumber"
                           ? "Card Number"
+                          : field === "photo"
+                          ? "Photo"
                           : field}
                       </h4>
 
+                      {field === "photo" ? (
+                        <div className="grid grid-cols-2 gap-2">
+                          {["x", "y", "width", "height"].map((prop) => (
+                            <div key={prop}>
+                              <label className="text-xs text-gray-600 block mb-1 capitalize">
+                                {prop === "x"
+                                  ? "X Position (%)"
+                                  : prop === "y"
+                                  ? "Y Position (%)"
+                                  : prop === "width"
+                                  ? "Width (%)"
+                                  : "Height (%)"}
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={fieldConfig[prop]}
+                                onChange={(e) =>
+                                  updateField(field, prop, e.target.value)
+                                }
+                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
@@ -554,6 +609,7 @@ const DEFAULT_CONFIG = ${JSON.stringify(config, null, 2)};`;
                           />
                         </div>
                       </div>
+                      )}
                     </div>
                   ))}
                 </div>

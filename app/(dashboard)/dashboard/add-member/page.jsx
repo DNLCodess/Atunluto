@@ -22,7 +22,6 @@ import {
   puKeys,
   prefetchPollingUnits,
 } from "@/hooks/use-pu";
-import { createClient } from "@/supabase/client";
 import MembershipCardDownload from "@/components/common/membership-card-download";
 
 const GENDERS = [
@@ -95,7 +94,6 @@ function ImageUpload({ lga, onUploaded, error }) {
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const supabase = createClient();
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -112,17 +110,27 @@ function ImageUpload({ lga, onUploaded, error }) {
     setUploading(true);
     setPreview(URL.createObjectURL(file));
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const res = await fetch(
-        `/api/admin/upload-url?lga=${encodeURIComponent(lga || "unknown")}&ext=${ext}`,
+      const sigRes = await fetch(
+        `/api/cloudinary-sign?lga=${encodeURIComponent(lga || "unknown")}`,
       );
-      if (!res.ok) throw new Error("Failed to get upload URL");
-      const { token, path, publicUrl } = await res.json();
-      const { error: uploadErr } = await supabase.storage
-        .from("members-images")
-        .uploadToSignedUrl(path, token, file, { contentType: file.type });
-      if (uploadErr) throw uploadErr;
-      onUploaded(publicUrl);
+      if (!sigRes.ok) throw new Error("Failed to get upload signature");
+      const { signature, timestamp, folder, cloudName, apiKey } =
+        await sigRes.json();
+
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("api_key", apiKey);
+      fd.append("timestamp", String(timestamp));
+      fd.append("signature", signature);
+      fd.append("folder", folder);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: "POST", body: fd },
+      );
+      if (!uploadRes.ok) throw new Error("Image upload failed");
+      const uploadData = await uploadRes.json();
+      onUploaded(uploadData.secure_url);
     } catch (err) {
       console.error("Image upload error:", err);
       setUploadError("Upload failed. Please try again.");
@@ -507,13 +515,6 @@ export default function AddMemberPage() {
                 </SelectEl>
               </Field>
 
-              <div className="sm:col-span-2">
-                <ImageUpload
-                  lga={form.lga}
-                  onUploaded={setProfileImageUrl}
-                  error={errors.profile_image}
-                />
-              </div>
             </div>
           </Section>
 
@@ -688,6 +689,15 @@ export default function AddMemberPage() {
                 )}
               </Field>
             </div>
+          </Section>
+
+          {/* ── Profile Photo — after location so LGA is already set ── */}
+          <Section title="Profile Photo" icon={Camera}>
+            <ImageUpload
+              lga={form.lga}
+              onUploaded={setProfileImageUrl}
+              error={errors.profile_image}
+            />
           </Section>
 
           {errors._form && (

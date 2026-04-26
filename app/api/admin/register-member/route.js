@@ -163,7 +163,7 @@ export async function POST(request) {
         profile_image_url: profile_image_url || null,
       })
       .select(
-        "id, full_name, membership_number, lga, ward, polling_unit, gender",
+        "id, full_name, membership_number, lga, ward, polling_unit, gender, profile_image_url",
       )
       .single();
 

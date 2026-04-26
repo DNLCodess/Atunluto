@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
 const CONFIG = {
+  photo: { x: 65.4, y: 3.5, width: 27.3, height: 23.1 },
   name: {
     x: 21,
     y: 34.2,
@@ -71,58 +72,86 @@ export default function MembershipCardDownload({ member }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.textBaseline = "top";
-      const w = img.width;
-      const h = img.height;
+    const bgImg = new Image();
+    bgImg.onload = () => {
+      const render = (photoImg) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        canvas.width = bgImg.width;
+        canvas.height = bgImg.height;
+        const w = bgImg.width;
+        const h = bgImg.height;
 
-      function drawText(text, cfg) {
-        const x = (cfg.x / 100) * w;
-        const y = (cfg.y / 100) * h;
-        const maxWidth = (cfg.maxWidth / 100) * w;
-        const fontSize = (cfg.fontSize / 100) * h;
-        const lineHeight = fontSize * 1.2;
-        ctx.fillStyle = cfg.color;
-        ctx.font = `${cfg.fontWeight} ${fontSize}px Raleway, Arial, sans-serif`;
-        ctx.textAlign = cfg.align;
-        const words = text.split(" ");
-        let line = "";
-        let lines = [];
-        for (let i = 0; i < words.length; i++) {
-          const test = line + words[i] + " ";
-          if (ctx.measureText(test).width > maxWidth && i > 0) {
-            lines.push(line.trim());
-            line = words[i] + " ";
-            if (lines.length >= cfg.maxLines) break;
-          } else {
-            line = test;
-          }
+        ctx.drawImage(bgImg, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+
+        if (photoImg) {
+          const px = (CONFIG.photo.x / 100) * w;
+          const py = (CONFIG.photo.y / 100) * h;
+          const pw = (CONFIG.photo.width / 100) * w;
+          const ph = (CONFIG.photo.height / 100) * h;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(px, py, pw, ph);
+          ctx.clip();
+          ctx.drawImage(photoImg, px, py, pw, ph);
+          ctx.restore();
         }
-        if (lines.length < cfg.maxLines && line.trim()) lines.push(line.trim());
-        lines.forEach((t, i) => ctx.fillText(t, x, y + i * lineHeight));
+
+        ctx.textBaseline = "top";
+
+        const drawText = (text, cfg) => {
+          const x = (cfg.x / 100) * w;
+          const y = (cfg.y / 100) * h;
+          const maxWidth = (cfg.maxWidth / 100) * w;
+          const fontSize = (cfg.fontSize / 100) * h;
+          const lineHeight = fontSize * 1.2;
+          ctx.fillStyle = cfg.color;
+          ctx.font = `${cfg.fontWeight} ${fontSize}px Raleway, Arial, sans-serif`;
+          ctx.textAlign = cfg.align;
+          const words = text.split(" ");
+          let line = "";
+          const lines = [];
+          for (let i = 0; i < words.length; i++) {
+            const test = line + words[i] + " ";
+            if (ctx.measureText(test).width > maxWidth && i > 0) {
+              lines.push(line.trim());
+              line = words[i] + " ";
+              if (lines.length >= cfg.maxLines) break;
+            } else {
+              line = test;
+            }
+          }
+          if (lines.length < cfg.maxLines && line.trim()) lines.push(line.trim());
+          lines.forEach((t, i) => ctx.fillText(t, x, y + i * lineHeight));
+        };
+
+        drawText(member.full_name.toUpperCase(), CONFIG.name);
+        drawText(
+          (member.gender || "").replace("_", " ").toUpperCase(),
+          CONFIG.gender,
+        );
+        drawText(member.lga.toUpperCase(), CONFIG.lga);
+        drawText(member.ward, CONFIG.ward);
+        drawText(member.polling_unit, CONFIG.pollingUnit);
+        drawText(member.membership_number, CONFIG.cardNumber);
+        setReady(true);
+      };
+
+      if (!member.profile_image_url) {
+        render(null);
+        return;
       }
 
-      drawText(member.full_name.toUpperCase(), CONFIG.name);
-      drawText(
-        (member.gender || "").replace("_", " ").toUpperCase(),
-        CONFIG.gender,
-      );
-      drawText(member.lga.toUpperCase(), CONFIG.lga);
-      drawText(member.ward, CONFIG.ward);
-      drawText(member.polling_unit, CONFIG.pollingUnit);
-      drawText(member.membership_number, CONFIG.cardNumber);
-      setReady(true);
+      const photoImg = new Image();
+      photoImg.crossOrigin = "anonymous";
+      photoImg.onload = () => render(photoImg);
+      photoImg.onerror = () => render(null);
+      photoImg.src = member.profile_image_url;
     };
-    img.src = "/card.png";
+    bgImg.src = "/card.png";
   }, [member]);
 
   function handleDownload() {
