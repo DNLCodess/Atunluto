@@ -603,7 +603,7 @@ function AddCandidateModal({ election, onClose }) {
     setError("");
     const fd = new FormData(e.currentTarget);
 
-    let photoPath = null;
+    let photoUrl = null;
 
     if (photoFile) {
       setUploading(true);
@@ -611,19 +611,27 @@ function AddCandidateModal({ election, onClose }) {
       try {
         const { getCandidatePhotoUploadUrl } =
           await import("@/app/actions/elections");
-        const urlResult = await getCandidatePhotoUploadUrl({
+        const signResult = await getCandidatePhotoUploadUrl({
           fileName: photoFile.name,
           fileType: photoFile.type,
           fileSize: photoFile.size,
         });
 
-        if (urlResult.error) {
-          setError(urlResult.error);
+        if (signResult.error) {
+          setError(signResult.error);
           setUploading(false);
           return;
         }
 
-        await new Promise((resolve, reject) => {
+        const uploadEndpoint = `https://api.cloudinary.com/v1_1/${signResult.cloudName}/image/upload`;
+        const formData = new FormData();
+        formData.append("file", photoFile);
+        formData.append("api_key", signResult.apiKey);
+        formData.append("timestamp", String(signResult.timestamp));
+        formData.append("signature", signResult.signature);
+        formData.append("folder", signResult.folder);
+
+        const responseText = await new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhrRef.current = xhr;
           xhr.upload.addEventListener("progress", (ev) => {
@@ -631,19 +639,19 @@ function AddCandidateModal({ election, onClose }) {
               setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
           });
           xhr.addEventListener("load", () =>
-            xhr.status < 300 ? resolve() : reject(new Error("Upload failed")),
+            xhr.status < 300
+              ? resolve(xhr.responseText)
+              : reject(new Error("Upload failed")),
           );
           xhr.addEventListener("error", () =>
             reject(new Error("Network error")),
           );
-          xhr.open("PUT", urlResult.uploadUrl);
-          xhr.setRequestHeader("Content-Type", photoFile.type);
-          xhr.send(photoFile);
+          xhr.open("POST", uploadEndpoint);
+          xhr.send(formData);
         });
 
-        // Store path — addCandidate generates the signed URL server-side
-        // after confirming the file exists in storage
-        photoPath = urlResult.path;
+        const uploadData = JSON.parse(responseText);
+        photoUrl = uploadData.secure_url;
       } catch (err) {
         setError(err.message || "Photo upload failed.");
         setUploading(false);
@@ -659,7 +667,7 @@ function AddCandidateModal({ election, onClose }) {
         party: fd.get("party"),
         position: fd.get("position"),
         lga: fd.get("lga") || null,
-        photoPath, // path string, not URL
+        photoUrl,
       });
       onClose();
     } catch (err) {

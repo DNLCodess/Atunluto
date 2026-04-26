@@ -1,11 +1,10 @@
 /**
- * POST /results-portal/api/results/upload-url  — getResultImageUploadUrl
- * Returns a signed upload URL for uploading a result image directly to storage.
+ * POST /results-portal/api/results/upload-url
  */
 
-import { createAdminClient } from "@/supabase/admin";
 import { getResultsSession } from "@/lib/erms-session";
 import { NextResponse } from "next/server";
+import { signUpload } from "@/lib/cloudinary";
 
 export async function POST(request) {
   const session = await getResultsSession();
@@ -14,7 +13,7 @@ export async function POST(request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const { fileName, fileType, fileSize } = body;
+  const { fileType, fileSize } = body;
 
   if (fileSize > 10 * 1024 * 1024) {
     return NextResponse.json({ error: "Image must be under 10MB." }, { status: 400 });
@@ -25,15 +24,8 @@ export async function POST(request) {
     return NextResponse.json({ error: "Only JPEG and PNG are allowed." }, { status: 400 });
   }
 
-  const ext = fileName.split(".").pop().toLowerCase();
   const ward = session.ward ? `/${session.ward.replace(/\s+/g, "_")}` : "";
-  const path = `${session.lga}${ward}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const supabase = createAdminClient();
+  const folder = `results-images/${session.lga}${ward}`;
 
-  const { data, error } = await supabase.storage
-    .from("results-images")
-    .createSignedUploadUrl(path);
-
-  if (error) return NextResponse.json({ error: "Failed to generate upload URL." }, { status: 500 });
-  return NextResponse.json({ uploadUrl: data.signedUrl, path });
+  return NextResponse.json({ ...signUpload(folder), uploadType: "image" });
 }

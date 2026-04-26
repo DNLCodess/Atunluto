@@ -6,24 +6,11 @@
  * Handles: validation, image upload, checksum computation, DB insert, audit.
  */
 
-import { createClient } from "@/supabase/server";
 import { getResultsSession } from "@/app/actions/election-auth";
 import { computeResultChecksum } from "@/utils/results-checksum";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/supabase/admin";
-
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-const VALID_LGAS = [
-  "Ibadan North",
-  "Ibadan North-East",
-  "Ibadan North-West",
-  "Ibadan South-East",
-  "Ibadan South-West",
-  "Ibarapa Central",
-  "Ibarapa East",
-  "Ibarapa North",
-  "Ido",
-];
+import { signUpload } from "@/lib/cloudinary";
 
 export async function getResultImageUploadUrl({
   fileName,
@@ -41,18 +28,10 @@ export async function getResultImageUploadUrl({
   if (!ALLOWED.includes(fileType))
     return { error: "Only JPEG and PNG are allowed." };
 
-  const ext = fileName.split(".").pop().toLowerCase();
   const ward = session.ward ? `/${session.ward.replace(/\s+/g, "_")}` : "";
-  const path = `${session.lga}${ward}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const supabase = createAdminClient();
+  const folder = `results-images/${session.lga}${ward}`;
 
-  const { data, error } = await supabase.storage
-    .from("results-images")
-    .createSignedUploadUrl(path);
-
-  if (error) return { error: "Failed to generate upload URL." };
-
-  return { uploadUrl: data.signedUrl, path };
+  return { ...signUpload(folder), uploadType: "image" };
 }
 
 export async function submitElectionResult(payload) {
@@ -68,9 +47,8 @@ export async function submitElectionResult(payload) {
     accreditedVoters,
     registeredVoters,
     notes,
-    imagePath,
+    imageUrl,
   } = payload;
-  // imagePath is a storage path string — file was uploaded directly by browser
 
   if (!electionId) return { error: "Election is required." };
   if (!ward?.trim()) return { error: "Ward is required." };
@@ -92,22 +70,8 @@ export async function submitElectionResult(payload) {
   if (election.status !== "active")
     return { error: "This election is no longer accepting submissions." };
 
-  // Generate signed read URL for the already-uploaded image
-  let result_image_url = null;
-  let result_image_path = null;
-
-  if (imagePath) {
-    const { data: readData, error: readError } = await supabase.storage
-      .from("results-images")
-      .createSignedUrl(imagePath, 60 * 60 * 24 * 365); // 1 year
-
-    if (readError) {
-      console.error("[ERMS] createSignedUrl error:", readError);
-      return { error: "Failed to process uploaded image. Please try again." };
-    }
-    result_image_url = readData.signedUrl;
-    result_image_path = imagePath;
-  }
+  const result_image_url = imageUrl || null;
+  const result_image_path = null;
 
   // Insert one row per candidate
   const insertRows = candidateVotes.map(({ candidateId, votes }) => ({

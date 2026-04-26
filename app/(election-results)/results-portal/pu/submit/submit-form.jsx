@@ -37,7 +37,7 @@ export default function PUSubmitForm({ lga, ward, pollingUnit, adminId }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadState, setUploadState] = useState("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [imagePath, setImagePath] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
   const xhrRef = useRef(null);
 
   const { data: elections = [], isLoading: loadingElections } =
@@ -83,7 +83,7 @@ export default function PUSubmitForm({ lga, ward, pollingUnit, adminId }) {
     setImageFile(file);
     setUploadState("idle");
     setUploadProgress(0);
-    setImagePath(null);
+    setImageUrl(null);
     const reader = new FileReader();
     reader.onload = (ev) => setImagePreview(ev.target.result);
     reader.readAsDataURL(file);
@@ -96,17 +96,24 @@ export default function PUSubmitForm({ lga, ward, pollingUnit, adminId }) {
     try {
       const { getResultImageUploadUrl } =
         await import("@/app/actions/result-submission");
-      const urlResult = await getResultImageUploadUrl({
+      const signResult = await getResultImageUploadUrl({
         fileName: file.name,
         fileType: file.type,
         fileSize: file.size,
       });
-      if (urlResult.error) {
+      if (signResult.error) {
         setUploadState("error");
-        setError(urlResult.error);
+        setError(signResult.error);
         return;
       }
-      await new Promise((resolve, reject) => {
+      const uploadEndpoint = `https://api.cloudinary.com/v1_1/${signResult.cloudName}/image/upload`;
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("api_key", signResult.apiKey);
+      fd.append("timestamp", String(signResult.timestamp));
+      fd.append("signature", signResult.signature);
+      fd.append("folder", signResult.folder);
+      const responseText = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhrRef.current = xhr;
         xhr.upload.addEventListener("progress", (ev) => {
@@ -114,14 +121,16 @@ export default function PUSubmitForm({ lga, ward, pollingUnit, adminId }) {
             setUploadProgress(Math.round((ev.loaded / ev.total) * 100));
         });
         xhr.addEventListener("load", () =>
-          xhr.status < 300 ? resolve() : reject(new Error("Upload failed")),
+          xhr.status < 300
+            ? resolve(xhr.responseText)
+            : reject(new Error("Upload failed")),
         );
         xhr.addEventListener("error", () => reject(new Error("Network error")));
-        xhr.open("PUT", urlResult.uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type);
-        xhr.send(file);
+        xhr.open("POST", uploadEndpoint);
+        xhr.send(fd);
       });
-      setImagePath(urlResult.path);
+      const uploadData = JSON.parse(responseText);
+      setImageUrl(uploadData.secure_url);
       setUploadState("done");
       setUploadProgress(100);
     } catch (err) {
@@ -146,7 +155,7 @@ export default function PUSubmitForm({ lga, ward, pollingUnit, adminId }) {
         accreditedVoters: Number(accredited),
         registeredVoters: Number(registered),
         notes,
-        imagePath,
+        imageUrl,
       });
       setSuccess(result);
     } catch (err) {
@@ -167,7 +176,7 @@ export default function PUSubmitForm({ lga, ward, pollingUnit, adminId }) {
     setImagePreview(null);
     setUploadState("idle");
     setUploadProgress(0);
-    setImagePath(null);
+    setImageUrl(null);
   }
 
   if (success) return <SuccessScreen result={success} onAnother={reset} />;

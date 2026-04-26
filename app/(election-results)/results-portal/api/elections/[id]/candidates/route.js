@@ -31,7 +31,7 @@ export async function POST(request, { params }) {
 
   const { id: electionId } = await params;
   const body = await request.json().catch(() => ({}));
-  const { full_name, party, position, lga, photoPath } = body;
+  const { full_name, party, position, lga, photoUrl } = body;
 
   if (!full_name?.trim()) return NextResponse.json({ error: "Candidate name is required." }, { status: 400 });
   if (!party?.trim()) return NextResponse.json({ error: "Party affiliation is required." }, { status: 400 });
@@ -53,20 +53,7 @@ export async function POST(request, { params }) {
     );
   }
 
-  let photo_url = null;
-  if (photoPath) {
-    const { data: readData, error: readError } = await supabase.storage
-      .from("results-images")
-      .createSignedUrl(photoPath, 60 * 60 * 24 * 365);
-
-    if (readError) {
-      return NextResponse.json(
-        { error: "Failed to generate photo URL. Please try again." },
-        { status: 500 },
-      );
-    }
-    photo_url = readData.signedUrl;
-  }
+  const photo_url = photoUrl || null;
 
   const { data, error } = await supabase
     .from("candidates")

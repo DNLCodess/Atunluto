@@ -2,8 +2,8 @@
 
 import { createAdminClient } from "@/supabase/admin";
 import { getResultsSession } from "@/app/actions/election-auth";
-import { computeResultChecksum } from "@/utils/results-checksum";
 import { headers } from "next/headers";
+import { signUpload } from "@/lib/cloudinary";
 
 // ─────────────────────────────────────────
 // GET PRESIGNED UPLOAD URL
@@ -22,17 +22,9 @@ export async function getEvidenceUploadUrl({ fileName, fileType, fileSize }) {
   if (!ALLOWED.includes(fileType))
     return { error: "Only JPEG, PNG, and PDF files are allowed." };
 
-  const ext = fileName.split(".").pop().toLowerCase();
-  const path = `security-evidence/${session.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const supabase = createAdminClient();
+  const folder = `security-evidence/${session.id}`;
 
-  const { data, error } = await supabase.storage
-    .from("security-evidence")
-    .createSignedUploadUrl(path);
-
-  if (error) return { error: "Failed to generate upload URL." };
-
-  return { uploadUrl: data.signedUrl, path, token: data.token };
+  return { ...signUpload(folder), uploadType: "auto" };
 }
 
 // ─────────────────────────────────────────
@@ -54,9 +46,9 @@ export async function fileSecurityReport(payload) {
   const description = isFormData
     ? payload.get("description")
     : payload.description;
-  const evidencePath = isFormData
-    ? payload.get("evidencePath")
-    : payload.evidencePath;
+  const evidenceUrl = isFormData
+    ? payload.get("evidenceUrl")
+    : payload.evidenceUrl;
 
   // Normalise report type: "Tampering" → "tampering", "Unauthorised Access" → "unauthorized_access"
   const TYPE_MAP = {
@@ -88,17 +80,9 @@ export async function fileSecurityReport(payload) {
   if (!VALID_URGENCY.includes(urgency))
     return { error: "Invalid urgency level." };
 
+  const evidence_url = evidenceUrl || null;
+
   const supabase = createAdminClient();
-
-  // Generate a 7-day signed read URL from the already-uploaded path
-  let evidence_url = null;
-  if (evidencePath) {
-    const { data: urlData } = await supabase.storage
-      .from("security-evidence")
-      .createSignedUrl(evidencePath, 3600 * 24 * 7);
-    evidence_url = urlData?.signedUrl || null;
-  }
-
   const { data, error } = await supabase
     .from("security_reports")
     .insert({

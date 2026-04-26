@@ -4,6 +4,21 @@ import { createClient } from "@/supabase/client";
 
 const supabase = createClient();
 
+async function cloudinaryUpload(file, { signature, timestamp, folder, cloudName, apiKey }) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("api_key", apiKey);
+  fd.append("timestamp", String(timestamp));
+  fd.append("signature", signature);
+  fd.append("folder", folder);
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+    { method: "POST", body: fd },
+  );
+  if (!res.ok) throw new Error("Image upload failed.");
+  return res.json();
+}
+
 export const GALLERY_QUERY_KEY = ["gallery"];
 
 const GALLERY_FIELDS = [
@@ -30,28 +45,14 @@ async function fetchGallery() {
 }
 
 async function uploadImageFn({ file, thumbnailFile, title, description, category, userId }) {
-  const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-  const fileExt = file.name.split(".").pop();
+  const signRes = await fetch("/api/cloudinary-sign?folder=gallery");
+  if (!signRes.ok) throw new Error("Failed to get upload credentials.");
+  const signParams = await signRes.json();
 
-  const thumbnailPath = `${fileName}_thumb.jpg`;
-  const fullPath = `${fileName}.${fileExt}`;
-
-  const [thumbUpload, fullUpload] = await Promise.all([
-    supabase.storage.from("gallery").upload(thumbnailPath, thumbnailFile, {
-      cacheControl: "3600",
-      upsert: false,
-    }),
-    supabase.storage.from("gallery").upload(fullPath, file, {
-      cacheControl: "3600",
-      upsert: false,
-    }),
+  const [thumbResult, fullResult] = await Promise.all([
+    cloudinaryUpload(thumbnailFile, signParams),
+    cloudinaryUpload(file, signParams),
   ]);
-
-  if (thumbUpload.error) throw thumbUpload.error;
-  if (fullUpload.error) throw fullUpload.error;
-
-  const { data: { publicUrl: thumbUrl } } = supabase.storage.from("gallery").getPublicUrl(thumbnailPath);
-  const { data: { publicUrl: fullUrl } } = supabase.storage.from("gallery").getPublicUrl(fullPath);
 
   const { data, error: dbError } = await supabase
     .from("gallery")
@@ -59,10 +60,10 @@ async function uploadImageFn({ file, thumbnailFile, title, description, category
       title,
       description,
       category,
-      image_url: thumbUrl,
-      full_image_url: fullUrl,
-      storage_path: thumbnailPath,
-      full_storage_path: fullPath,
+      image_url: thumbResult.secure_url,
+      full_image_url: fullResult.secure_url,
+      storage_path: thumbResult.public_id,
+      full_storage_path: fullResult.public_id,
       uploaded_by: userId,
     })
     .select(GALLERY_FIELDS)
@@ -85,14 +86,18 @@ async function updateImageFn({ id, title, description, category }) {
 }
 
 async function deleteImageFn(image) {
-  // Remove both storage files in parallel
-  const pathsToRemove = [image.storage_path, image.full_storage_path].filter(Boolean);
+  const publicIds = [image.storage_path, image.full_storage_path].filter(Boolean);
 
-  if (pathsToRemove.length > 0) {
-    const { error: storageError } = await supabase.storage
-      .from("gallery")
-      .remove(pathsToRemove);
-    if (storageError) throw storageError;
+  if (publicIds.length > 0) {
+    const res = await fetch("/api/cloudinary-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicIds }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete images from storage.");
+    }
   }
 
   const { error: dbError } = await supabase

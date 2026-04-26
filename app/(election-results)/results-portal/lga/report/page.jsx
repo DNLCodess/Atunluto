@@ -79,7 +79,7 @@ export default function ReportPage() {
   // Evidence upload state
   const [evidenceFile, setEvidenceFile] = useState(null);
   const [evidenceName, setEvidenceName] = useState("");
-  const [evidencePath, setEvidencePath] = useState(null); // storage path after upload
+  const [evidenceUrl, setEvidenceUrl] = useState(null); // permanent Cloudinary URL after upload
   const [uploadState, setUploadState] = useState(UPLOAD_IDLE);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState("");
@@ -130,7 +130,7 @@ export default function ReportPage() {
 
     setEvidenceFile(file);
     setEvidenceName(file.name);
-    setEvidencePath(null);
+    setEvidenceUrl(null);
     setUploadError("");
     setUploadProgress(0);
     setUploadState(UPLOAD_COMPRESSING);
@@ -139,23 +139,31 @@ export default function ReportPage() {
       // 1. Compress if image
       const compressed = await compressImage(file);
 
-      // 2. Get presigned upload URL from server
-      const urlResult = await getEvidenceUploadUrl({
+      // 2. Get Cloudinary signing params from server
+      const signResult = await getEvidenceUploadUrl({
         fileName: compressed.name,
         fileType: compressed.type,
         fileSize: compressed.size,
       });
 
-      if (urlResult.error) {
+      if (signResult.error) {
         setUploadState(UPLOAD_ERROR);
-        setUploadError(urlResult.error);
+        setUploadError(signResult.error);
         return;
       }
 
-      // 3. Upload directly to Supabase Storage via XHR (for progress events)
+      // 3. Upload directly to Cloudinary via XHR (for progress events)
       setUploadState(UPLOAD_UPLOADING);
 
-      await new Promise((resolve, reject) => {
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${signResult.cloudName}/${signResult.uploadType || "auto"}/upload`;
+      const fd = new FormData();
+      fd.append("file", compressed);
+      fd.append("api_key", signResult.apiKey);
+      fd.append("timestamp", String(signResult.timestamp));
+      fd.append("signature", signResult.signature);
+      fd.append("folder", signResult.folder);
+
+      const responseText = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhrRef.current = xhr;
 
@@ -167,7 +175,7 @@ export default function ReportPage() {
 
         xhr.addEventListener("load", () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
+            resolve(xhr.responseText);
           } else {
             reject(new Error(`Upload failed: ${xhr.statusText}`));
           }
@@ -180,14 +188,14 @@ export default function ReportPage() {
           reject(new Error("Upload cancelled.")),
         );
 
-        xhr.open("PUT", urlResult.uploadUrl);
-        xhr.setRequestHeader("Content-Type", compressed.type);
-        xhr.send(compressed);
+        xhr.open("POST", uploadUrl);
+        xhr.send(fd);
       });
 
+      const uploadData = JSON.parse(responseText);
       setUploadProgress(100);
       setUploadState(UPLOAD_DONE);
-      setEvidencePath(urlResult.path);
+      setEvidenceUrl(uploadData.secure_url);
     } catch (err) {
       setUploadState(UPLOAD_ERROR);
       setUploadError(err.message || "Upload failed. Please try again.");
@@ -200,7 +208,7 @@ export default function ReportPage() {
     }
     setEvidenceFile(null);
     setEvidenceName("");
-    setEvidencePath(null);
+    setEvidenceUrl(null);
     setUploadState(UPLOAD_IDLE);
     setUploadProgress(0);
     setUploadError("");
@@ -221,7 +229,7 @@ export default function ReportPage() {
       report_type: reportType,
       urgency,
       description,
-      evidencePath: evidencePath || null, // pass path, not file
+      evidenceUrl: evidenceUrl || null,
     });
     setLoading(false);
 

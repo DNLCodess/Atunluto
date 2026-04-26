@@ -72,7 +72,7 @@ export async function POST(request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const { report_type: rawType, urgency, description, evidencePath } = body;
+  const { report_type: rawType, urgency, description, evidenceUrl } = body;
 
   const report_type =
     TYPE_MAP[rawType?.toLowerCase?.().trim()] ??
@@ -90,16 +90,9 @@ export async function POST(request) {
   if (!VALID_TYPES.includes(report_type)) return NextResponse.json({ error: "Invalid report type." }, { status: 400 });
   if (!VALID_URGENCY.includes(urgency)) return NextResponse.json({ error: "Invalid urgency level." }, { status: 400 });
 
+  const evidence_url = evidenceUrl || null;
+
   const supabase = createAdminClient();
-
-  let evidence_url = null;
-  if (evidencePath) {
-    const { data: urlData } = await supabase.storage
-      .from("security-evidence")
-      .createSignedUrl(evidencePath, 3600 * 24 * 7);
-    evidence_url = urlData?.signedUrl || null;
-  }
-
   const { data, error } = await supabase
     .from("security_reports")
     .insert({

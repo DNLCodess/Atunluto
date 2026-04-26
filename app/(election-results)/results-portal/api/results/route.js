@@ -23,7 +23,7 @@ export async function POST(request) {
     accreditedVoters,
     registeredVoters,
     notes,
-    imagePath,
+    imageUrl,
   } = body;
 
   if (!electionId) return NextResponse.json({ error: "Election is required." }, { status: 400 });
@@ -50,23 +50,8 @@ export async function POST(request) {
     );
   }
 
-  let result_image_url = null;
-  let result_image_path = null;
-
-  if (imagePath) {
-    const { data: readData, error: readError } = await supabase.storage
-      .from("results-images")
-      .createSignedUrl(imagePath, 60 * 60 * 24 * 365);
-
-    if (readError) {
-      return NextResponse.json(
-        { error: "Failed to process uploaded image. Please try again." },
-        { status: 500 },
-      );
-    }
-    result_image_url = readData.signedUrl;
-    result_image_path = imagePath;
-  }
+  const result_image_url = imageUrl || null;
+  const result_image_path = null;
 
   const insertRows = candidateVotes.map(({ candidateId, votes }) => ({
     election_id: electionId,

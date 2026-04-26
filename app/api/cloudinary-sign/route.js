@@ -17,8 +17,9 @@ export async function GET(request) {
       return Response.json({ error: "Unauthorised." }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
+    const folderOverride = searchParams.get("folder");
     const lga = searchParams.get("lga") || "general";
-    const folder = `members-images/${lga}`;
+    const folder = folderOverride || `members-images/${lga}`;
 
     const timestamp = Math.round(Date.now() / 1000);
     const signature = cloudinary.utils.api_sign_request(

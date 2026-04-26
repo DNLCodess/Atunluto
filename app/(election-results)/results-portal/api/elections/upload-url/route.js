@@ -1,11 +1,10 @@
 /**
- * POST /results-portal/api/elections/upload-url  — getCandidatePhotoUploadUrl
- * Returns a signed upload URL for uploading a candidate photo directly to storage.
+ * POST /results-portal/api/elections/upload-url
  */
 
-import { createAdminClient } from "@/supabase/admin";
 import { getResultsSession } from "@/lib/erms-session";
 import { NextResponse } from "next/server";
+import { signUpload } from "@/lib/cloudinary";
 
 export async function POST(request) {
   const session = await getResultsSession();
@@ -14,7 +13,7 @@ export async function POST(request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const { fileName, fileType, fileSize } = body;
+  const { fileType, fileSize } = body;
 
   if (fileSize > 5 * 1024 * 1024) {
     return NextResponse.json({ error: "Photo must be under 5MB." }, { status: 400 });
@@ -25,14 +24,5 @@ export async function POST(request) {
     return NextResponse.json({ error: "Only JPEG and PNG are allowed." }, { status: 400 });
   }
 
-  const ext = fileName.split(".").pop().toLowerCase();
-  const path = `candidates/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const supabase = createAdminClient();
-
-  const { data, error } = await supabase.storage
-    .from("results-images")
-    .createSignedUploadUrl(path);
-
-  if (error) return NextResponse.json({ error: "Failed to generate upload URL." }, { status: 500 });
-  return NextResponse.json({ uploadUrl: data.signedUrl, path });
+  return NextResponse.json({ ...signUpload("candidates"), uploadType: "image" });
 }
