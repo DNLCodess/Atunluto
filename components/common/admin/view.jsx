@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import { getCldImageUrl } from "@/utils/cloudinary";
 
 export default function ViewMemberModal({ member, onClose }) {
   if (!member) return null;
@@ -76,9 +77,10 @@ export default function ViewMemberModal({ member, onClose }) {
                   {member.profile_image_url ? (
                     <div className="w-24 h-24 rounded-2xl overflow-hidden border-4 border-white/30 shadow-xl">
                       <img
-                        src={member.profile_image_url}
+                        src={getCldImageUrl(member.profile_image_url, { width: 192, height: 192 })}
                         alt={member.full_name}
                         className="w-full h-full object-cover"
+                        decoding="async"
                       />
                     </div>
                   ) : (

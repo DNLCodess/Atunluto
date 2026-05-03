@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
+import { getCldImageUrl } from "@/utils/cloudinary";
 import ViewMemberModal from "@/components/common/admin/view";
 import EditMemberModal from "@/components/common/admin/edit";
 import MembershipCardPrinter from "@/components/shared/admin/card-printer";
@@ -146,10 +147,11 @@ function MemberCard({ member, role, onView, onEdit, onDelete, onPrintCard }) {
             {member.profile_image_url ? (
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/30">
                 <img
-                  src={member.profile_image_url}
+                  src={getCldImageUrl(member.profile_image_url, { width: 128, height: 128 })}
                   alt={member.full_name}
                   className="w-full h-full object-cover"
                   loading="lazy"
+                  decoding="async"
                 />
               </div>
             ) : (
@@ -514,9 +516,11 @@ function DuplicateGroup({ group, reasons, role, onView, onDelete }) {
               </div>
               {member.profile_image_url ? (
                 <img
-                  src={member.profile_image_url}
+                  src={getCldImageUrl(member.profile_image_url, { width: 80, height: 80 })}
                   alt={member.full_name}
                   className="w-10 h-10 rounded-full object-cover shrink-0"
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <div className="w-10 h-10 bg-border-gray rounded-full flex items-center justify-center text-sm font-bold text-text-gray shrink-0">
