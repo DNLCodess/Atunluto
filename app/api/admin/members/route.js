@@ -37,7 +37,8 @@ export async function GET() {
     const { data, error } = await serviceClient
       .from("members")
       .select(MEMBER_FIELDS)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(50000);
     if (error) throw error;
     return Response.json(data ?? []);
   } catch (err) {
