@@ -184,7 +184,8 @@ export function useMemberCollationByLGA() {
     queryFn: async () => {
       let query = supabase
         .from("members")
-        .select("lga, ward, gender, created_at");
+        .select("lga, ward, gender, created_at")
+        .limit(50000);
 
       if (
         actor?.role === "super_user" ||
@@ -249,48 +250,60 @@ export function useMemberStats() {
   return useQuery({
     queryKey: ["member-stats", actor?.role, actor?.lga],
     queryFn: async () => {
-      let query = supabase
-        .from("members")
-        .select("id, lga, gender, created_at", { count: "exact" });
-
-      if (actor?.role !== "state_admin") {
-        query = query.eq("lga", actor.lga);
-      }
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
       const now = new Date();
-      const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthStr = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
+      const thisMonthStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+      ).toISOString();
+      const lastMonthStart = new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        1,
+      ).toISOString();
 
-      let thisMonthCount = 0;
-      let lastMonthCount = 0;
-      let maleCount = 0;
-      let femaleCount = 0;
+      const base = () => {
+        let q = supabase
+          .from("members")
+          .select("*", { count: "exact", head: true });
+        if (actor?.role !== "state_admin") q = q.eq("lga", actor.lga);
+        return q;
+      };
 
-      data.forEach((m) => {
-        const month = m.created_at?.slice(0, 7);
-        if (month === thisMonth) thisMonthCount += 1;
-        if (month === lastMonthStr) lastMonthCount += 1;
-        if (m.gender === "male") maleCount += 1;
-        if (m.gender === "female") femaleCount += 1;
-      });
+      const [
+        { count: total, error: e1 },
+        { count: maleCount, error: e2 },
+        { count: femaleCount, error: e3 },
+        { count: thisMonthCount, error: e4 },
+        { count: lastMonthCount, error: e5 },
+      ] = await Promise.all([
+        base(),
+        base().eq("gender", "male"),
+        base().eq("gender", "female"),
+        base().gte("created_at", thisMonthStart),
+        base()
+          .gte("created_at", lastMonthStart)
+          .lt("created_at", thisMonthStart),
+      ]);
+
+      const err = e1 || e2 || e3 || e4 || e5;
+      if (err) throw err;
+
+      const t = total ?? 0;
+      const m = maleCount ?? 0;
+      const f = femaleCount ?? 0;
+      const tm = thisMonthCount ?? 0;
+      const lm = lastMonthCount ?? 0;
 
       return {
-        total: count || 0,
-        thisMonth: thisMonthCount,
-        lastMonth: lastMonthCount,
-        male: maleCount,
-        female: femaleCount,
-        other: count - maleCount - femaleCount,
+        total: t,
+        thisMonth: tm,
+        lastMonth: lm,
+        male: m,
+        female: f,
+        other: t - m - f,
         growth:
-          lastMonthCount > 0
-            ? Math.round(
-                ((thisMonthCount - lastMonthCount) / lastMonthCount) * 100,
-              )
-            : null,
+          lm > 0 ? Math.round(((tm - lm) / lm) * 100) : null,
       };
     },
     enabled: !!actor,

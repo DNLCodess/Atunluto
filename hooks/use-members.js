@@ -3,23 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export const MEMBERS_QUERY_KEY = ["members"];
 
-const MEMBER_FIELDS = [
-  "id",
-  "membership_number",
-  "full_name",
-  "gender",
-  "date_of_birth",
-  "phone",
-  "whatsapp",
-  "messenger",
-  "lga",
-  "ward",
-  "polling_unit",
-  "address",
-  "profile_image_url",
-  "created_at",
-].join(", ");
-
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
 
 async function fetchMembers() {
@@ -95,6 +78,9 @@ export function useMembers() {
     mutationFn: addMemberFn,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["member-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["members-collation-lga"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 
@@ -114,10 +100,11 @@ export function useMembers() {
         queryClient.setQueryData(MEMBERS_QUERY_KEY, context.previous);
       }
     },
-    onSuccess: (updatedMember) => {
-      queryClient.setQueryData(MEMBERS_QUERY_KEY, (old = []) =>
-        old.map((m) => (m.id === updatedMember.id ? updatedMember : m)),
-      );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["member-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["members-collation-lga"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 
@@ -136,6 +123,12 @@ export function useMembers() {
       if (context?.previous) {
         queryClient.setQueryData(MEMBERS_QUERY_KEY, context.previous);
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["member-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["members-collation-lga"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 

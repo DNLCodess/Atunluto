@@ -33,15 +33,15 @@ const supabase = createClient();
 async function fetchStats() {
   const now = new Date();
   const todayStart = startOfDay(now).toISOString();
-  const weekStart = subDays(now, 7).toISOString();
-  const monthStart = subDays(now, 30).toISOString();
+  const weekStart = startOfDay(subDays(now, 7)).toISOString();
+  const monthStart = startOfDay(subDays(now, 30)).toISOString();
 
   const [
-    { count: total },
-    { count: todayJoins },
-    { count: weekJoins },
-    { count: monthJoins },
-    { data: latest },
+    { count: total,      error: e1 },
+    { count: todayJoins, error: e2 },
+    { count: weekJoins,  error: e3 },
+    { count: monthJoins, error: e4 },
+    { data: latest,      error: e5 },
   ] = await Promise.all([
     supabase.from("members").select("*", { count: "exact", head: true }),
     supabase
@@ -63,6 +63,9 @@ async function fetchStats() {
       .limit(1),
   ]);
 
+  const err = e1 || e2 || e3 || e4 || e5;
+  if (err) throw err;
+
   return {
     total: total ?? 0,
     todayJoins: todayJoins ?? 0,
@@ -77,7 +80,8 @@ async function fetchLgaDistribution() {
   const { data, error } = await supabase
     .from("members")
     .select("lga")
-    .not("lga", "is", null);
+    .not("lga", "is", null)
+    .limit(50000);
 
   if (error) throw error;
 
@@ -96,7 +100,8 @@ async function fetchWardDistribution() {
   const { data, error } = await supabase
     .from("members")
     .select("lga, ward")
-    .not("ward", "is", null);
+    .not("ward", "is", null)
+    .limit(50000);
 
   if (error) throw error;
 
@@ -116,7 +121,8 @@ async function fetchPollingDistribution() {
   const { data, error } = await supabase
     .from("members")
     .select("polling_unit")
-    .not("polling_unit", "is", null);
+    .not("polling_unit", "is", null)
+    .limit(50000);
 
   if (error) throw error;
 
@@ -133,15 +139,24 @@ async function fetchPollingDistribution() {
 
 async function fetchDailyGrowth() {
   const now = new Date();
-  const monthStart = subDays(now, 29).toISOString();
+  const windowStart = startOfDay(subDays(now, 29));
+  const windowStartISO = windowStart.toISOString();
 
-  const { data, error } = await supabase
-    .from("members")
-    .select("created_at")
-    .gte("created_at", monthStart)
-    .order("created_at", { ascending: true });
+  const [{ data, error }, { count: baseline, error: baselineError }] = await Promise.all([
+    supabase
+      .from("members")
+      .select("created_at")
+      .gte("created_at", windowStartISO)
+      .order("created_at", { ascending: true })
+      .limit(50000),
+    supabase
+      .from("members")
+      .select("*", { count: "exact", head: true })
+      .lt("created_at", windowStartISO),
+  ]);
 
   if (error) throw error;
+  if (baselineError) throw baselineError;
 
   const days = Array.from({ length: 30 }, (_, i) => ({
     date: format(subDays(now, 29 - i), "MMM dd"),
@@ -155,7 +170,7 @@ async function fetchDailyGrowth() {
     if (idx !== -1) days[idx].daily++;
   });
 
-  let cumulative = 0;
+  let cumulative = baseline ?? 0;
   return days.map(({ date, daily }) => {
     cumulative += daily;
     return { date, daily, total: cumulative };
@@ -260,7 +275,7 @@ export default function AdminDashboard() {
             {[
               {
                 label: "Total Members",
-                value: stats?.total.toLocaleString(),
+                value: (stats?.total ?? 0).toLocaleString(),
                 icon: <Users className="w-7 h-7 text-green-700" />,
                 bg: "bg-green-100",
               },

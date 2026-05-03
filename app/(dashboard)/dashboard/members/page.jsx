@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { format, differenceInYears } from "date-fns";
+import { useState, useMemo, useEffect } from "react";
+import { format, differenceInYears, startOfDay, subDays } from "date-fns";
 import { useMembers } from "@/hooks/use-members";
 import {
   useCurrentAdmin,
@@ -31,6 +31,9 @@ import {
   BarChart2,
   List,
   Building2,
+  AlertTriangle,
+  Copy,
+  Check,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
@@ -62,6 +65,16 @@ export function calculateAge(dateOfBirth) {
 function formatGender(gender) {
   if (!gender) return "N/A";
   return gender.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Strips country code / leading zero so +2348012345678, 08012345678 and
+// 8012345678 all normalise to the same 10-digit string.
+function normalizePhone(raw) {
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, "");
+  if (d.startsWith("234") && d.length >= 13) return d.slice(3);
+  if (d.startsWith("0") && d.length >= 10) return d.slice(1);
+  return d.length >= 7 ? d : null;
 }
 
 function doExportToExcel(members) {
@@ -360,6 +373,7 @@ function LGACollationRow({ data, rank }) {
     data.total > 0 ? Math.round((data.male / data.total) * 100) : 0;
   const femalePercent =
     data.total > 0 ? Math.round((data.female / data.total) * 100) : 0;
+  const otherPercent = Math.max(0, 100 - malePercent - femalePercent);
 
   return (
     <div className="border-b border-border-gray last:border-0">
@@ -388,6 +402,12 @@ function LGACollationRow({ data, rank }) {
               className="bg-accent-green transition-all"
               style={{ width: `${femalePercent}%` }}
             />
+            {otherPercent > 0 && (
+              <div
+                className="bg-gray-400 transition-all"
+                style={{ width: `${otherPercent}%` }}
+              />
+            )}
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-4 shrink-0">
@@ -465,6 +485,106 @@ function LGACollationRow({ data, rank }) {
   );
 }
 
+// ─── Duplicate Group ──────────────────────────────────────────────────────────
+function DuplicateGroup({ group, reasons, role, onView, onDelete }) {
+  return (
+    <div className="border border-amber-200 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2 flex-wrap">
+        <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+        {reasons.map((r) => (
+          <span
+            key={r}
+            className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"
+          >
+            {r}
+          </span>
+        ))}
+      </div>
+      <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-amber-100 bg-white">
+        {group.map((member) => (
+          <div key={member.id} className="p-4 space-y-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-semibold text-text-dark text-sm truncate">
+                  {member.full_name}
+                </p>
+                <p className="text-xs text-text-gray font-mono mt-0.5">
+                  {member.membership_number}
+                </p>
+              </div>
+              {member.profile_image_url ? (
+                <img
+                  src={member.profile_image_url}
+                  alt={member.full_name}
+                  className="w-10 h-10 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-10 h-10 bg-border-gray rounded-full flex items-center justify-center text-sm font-bold text-text-gray shrink-0">
+                  {member.full_name?.[0] ?? "?"}
+                </div>
+              )}
+            </div>
+
+            <div className="text-xs text-text-gray space-y-1.5">
+              <p className="flex items-center gap-1.5">
+                <Phone size={11} className="shrink-0" />
+                {member.phone}
+              </p>
+              {member.whatsapp && (
+                <p className="flex items-center gap-1.5">
+                  <MessageCircle size={11} className="shrink-0" />
+                  {member.whatsapp}
+                </p>
+              )}
+              <p className="flex items-center gap-1.5">
+                <Calendar size={11} className="shrink-0" />
+                {member.date_of_birth
+                  ? `${format(new Date(member.date_of_birth), "dd MMM yyyy")} · ${calculateAge(member.date_of_birth)} yrs`
+                  : "—"}
+              </p>
+              <p className="flex items-center gap-1.5">
+                <MapPin size={11} className="shrink-0" />
+                {member.lga} · Ward {member.ward}
+              </p>
+              <p className="text-text-light">
+                Registered{" "}
+                {member.created_at
+                  ? format(new Date(member.created_at), "dd MMM yyyy")
+                  : "—"}
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => onView(member)}
+                className="text-xs text-accent-green hover:bg-light-green/30 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+              >
+                <Eye size={11} /> View
+              </button>
+              {canDeleteMember(role) && (
+                <button
+                  onClick={() => onDelete(member)}
+                  className="text-xs text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                >
+                  <Trash2 size={11} /> Delete
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const AGE_GROUPS = {
+  "18-25": [18, 25],
+  "26-35": [26, 35],
+  "36-45": [36, 45],
+  "46-55": [46, 55],
+  "56+":   [56, 200],
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 10;
 
@@ -489,7 +609,10 @@ export default function MembersPage() {
   const [search, setSearch] = useState("");
   const [lgaFilter, setLgaFilter] = useState("all");
   const [wardFilter, setWardFilter] = useState("all");
+  const [pollingUnitFilter, setPollingUnitFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState("all");
+  const [ageGroupFilter, setAgeGroupFilter] = useState("all");
+  const [regPeriodFilter, setRegPeriodFilter] = useState("all");
   const [page, setPage] = useState(1);
 
   const [viewMember, setViewMember] = useState(null);
@@ -501,13 +624,26 @@ export default function MembersPage() {
     () => [...new Set(members.map((m) => m.lga).filter(Boolean))].sort(),
     [members],
   );
-  const uniqueWards = useMemo(
-    () => [...new Set(members.map((m) => m.ward).filter(Boolean))].sort(),
-    [members],
-  );
+
+  // Wards scoped to selected LGA
+  const uniqueWards = useMemo(() => {
+    const pool = lgaFilter !== "all"
+      ? members.filter((m) => m.lga === lgaFilter)
+      : members;
+    return [...new Set(pool.map((m) => m.ward).filter(Boolean))].sort();
+  }, [members, lgaFilter]);
+
+  // Polling units scoped to selected LGA + ward
+  const uniquePollingUnits = useMemo(() => {
+    let pool = members;
+    if (lgaFilter !== "all") pool = pool.filter((m) => m.lga === lgaFilter);
+    if (wardFilter !== "all") pool = pool.filter((m) => m.ward === wardFilter);
+    return [...new Set(pool.map((m) => m.polling_unit).filter(Boolean))].sort();
+  }, [members, lgaFilter, wardFilter]);
 
   const filteredMembers = useMemo(() => {
     const q = search.toLowerCase();
+    const now = new Date();
     return members.filter((m) => {
       if (
         q &&
@@ -521,12 +657,46 @@ export default function MembersPage() {
         return false;
       if (lgaFilter !== "all" && m.lga !== lgaFilter) return false;
       if (wardFilter !== "all" && m.ward !== wardFilter) return false;
+      if (pollingUnitFilter !== "all" && m.polling_unit !== pollingUnitFilter) return false;
       if (genderFilter !== "all" && m.gender !== genderFilter) return false;
+
+      if (ageGroupFilter !== "all") {
+        if (!m.date_of_birth) return false;
+        const age = differenceInYears(now, new Date(m.date_of_birth));
+        const [min, max] = AGE_GROUPS[ageGroupFilter];
+        if (age < min || age > max) return false;
+      }
+
+      if (regPeriodFilter !== "all") {
+        const created = new Date(m.created_at);
+        if (regPeriodFilter === "today" && created < startOfDay(now))
+          return false;
+        if (regPeriodFilter === "this_week" && created < startOfDay(subDays(now, 7)))
+          return false;
+        if (regPeriodFilter === "this_month" &&
+          created < new Date(now.getFullYear(), now.getMonth(), 1))
+          return false;
+        if (regPeriodFilter === "last_month") {
+          const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          const end   = new Date(now.getFullYear(), now.getMonth(), 1);
+          if (created < start || created >= end) return false;
+        }
+        if (regPeriodFilter === "this_year" &&
+          created < new Date(now.getFullYear(), 0, 1))
+          return false;
+      }
+
       return true;
     });
-  }, [members, search, lgaFilter, wardFilter, genderFilter]);
+  }, [members, search, lgaFilter, wardFilter, pollingUnitFilter, genderFilter, ageGroupFilter, regPeriodFilter]);
 
   const totalPages = Math.ceil(filteredMembers.length / PAGE_SIZE);
+
+  // Clamp page when filteredMembers shrinks (e.g. after a delete)
+  useEffect(() => {
+    if (totalPages > 0 && page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
+
   const paginated = useMemo(
     () => filteredMembers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [filteredMembers, page],
@@ -535,23 +705,84 @@ export default function MembersPage() {
     search ||
     lgaFilter !== "all" ||
     wardFilter !== "all" ||
-    genderFilter !== "all";
+    pollingUnitFilter !== "all" ||
+    genderFilter !== "all" ||
+    ageGroupFilter !== "all" ||
+    regPeriodFilter !== "all";
   const collationTotal = collation.reduce((s, l) => s + l.total, 0);
 
-  function resetFilters() {
+  const duplicateGroups = useMemo(() => {
+    // Map of sortedIds -> { members, reasons[] }
+    const groups = new Map();
+
+    const addGroup = (memberList, reason) => {
+      if (memberList.length < 2) return;
+      const key = memberList
+        .map((m) => m.id)
+        .sort()
+        .join("|");
+      if (groups.has(key)) {
+        groups.get(key).reasons.push(reason);
+      } else {
+        groups.set(key, { members: memberList, reasons: [reason] });
+      }
+    };
+
+    // Same phone (normalised)
+    const byPhone = {};
+    members.forEach((m) => {
+      const k = normalizePhone(m.phone);
+      if (k) (byPhone[k] = byPhone[k] || []).push(m);
+    });
+    Object.values(byPhone)
+      .filter((g) => g.length > 1)
+      .forEach((g) => addGroup(g, "Same phone number"));
+
+    // Same WhatsApp (normalised)
+    const byWa = {};
+    members.forEach((m) => {
+      if (!m.whatsapp) return;
+      const k = normalizePhone(m.whatsapp);
+      if (k) (byWa[k] = byWa[k] || []).push(m);
+    });
+    Object.values(byWa)
+      .filter((g) => g.length > 1)
+      .forEach((g) => addGroup(g, "Same WhatsApp number"));
+
+    // Same full name + date of birth
+    const byNameDob = {};
+    members.forEach((m) => {
+      if (!m.full_name || !m.date_of_birth) return;
+      const k = `${m.full_name.toLowerCase().trim()}|${m.date_of_birth}`;
+      (byNameDob[k] = byNameDob[k] || []).push(m);
+    });
+    Object.values(byNameDob)
+      .filter((g) => g.length > 1)
+      .forEach((g) => addGroup(g, "Same name & date of birth"));
+
+    // Sort: most reasons first (highest confidence)
+    return Array.from(groups.values()).sort(
+      (a, b) => b.reasons.length - a.reasons.length,
+    );
+  }, [members]);
+
+  const resetFilters = () => {
     setSearch("");
     setLgaFilter("all");
     setWardFilter("all");
+    setPollingUnitFilter("all");
     setGenderFilter("all");
+    setAgeGroupFilter("all");
+    setRegPeriodFilter("all");
     setPage(1);
-  }
+  };
 
-  function handleDelete() {
+  const handleDelete = () => {
     if (!deleteMemberTarget) return;
     deleteMember(deleteMemberTarget.id, {
       onSuccess: () => setDeleteMemberTarget(null),
     });
-  }
+  };
 
   return (
     <div className="min-h-screen bg-off-white">
@@ -637,7 +868,8 @@ export default function MembersPage() {
           {[
             { key: "collation", label: "LGA Collation", icon: BarChart2 },
             { key: "members", label: "Member List", icon: List },
-          ].map(({ key, label, icon: Icon }) => (
+            { key: "duplicates", label: "Duplicates", icon: Copy, badge: duplicateGroups.length },
+          ].map(({ key, label, icon: Icon, badge }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
@@ -649,6 +881,11 @@ export default function MembersPage() {
             >
               <Icon size={15} />
               <span className="hidden sm:inline">{label}</span>
+              {badge > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded-full font-bold leading-none">
+                  {badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -706,17 +943,15 @@ export default function MembersPage() {
         {/* ── Member List Tab ── */}
         {activeTab === "members" && (
           <>
-            <div className="bg-white rounded-2xl shadow-sm border border-border-gray p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-border-gray p-6 space-y-3">
+              {/* Row 1 — location hierarchy */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-3.5 w-5 h-5 text-text-gray" />
                   <input
                     type="text"
                     value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     placeholder="Search name, phone, membership no..."
                     className="w-full pl-10 pr-4 py-3 border border-border-gray rounded-xl focus:outline-none focus:border-accent-green focus:ring-2 focus:ring-accent-green/20 text-sm text-text-dark placeholder-text-light"
                   />
@@ -725,44 +960,78 @@ export default function MembersPage() {
                   value={lgaFilter}
                   onChange={(e) => {
                     setLgaFilter(e.target.value);
+                    setWardFilter("all");
+                    setPollingUnitFilter("all");
                     setPage(1);
                   }}
                   className="px-4 py-3 border border-border-gray rounded-xl focus:outline-none focus:border-accent-green text-sm text-text-dark bg-white"
                 >
                   <option value="all">All LGAs</option>
                   {uniqueLGAs.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
+                    <option key={l} value={l}>{l}</option>
                   ))}
                 </select>
                 <select
                   value={wardFilter}
                   onChange={(e) => {
                     setWardFilter(e.target.value);
+                    setPollingUnitFilter("all");
                     setPage(1);
                   }}
                   className="px-4 py-3 border border-border-gray rounded-xl focus:outline-none focus:border-accent-green text-sm text-text-dark bg-white"
                 >
                   <option value="all">All Wards</option>
                   {uniqueWards.map((w) => (
-                    <option key={w} value={w}>
-                      {w}
-                    </option>
+                    <option key={w} value={w}>{w}</option>
                   ))}
                 </select>
                 <select
+                  value={pollingUnitFilter}
+                  onChange={(e) => { setPollingUnitFilter(e.target.value); setPage(1); }}
+                  className="px-4 py-3 border border-border-gray rounded-xl focus:outline-none focus:border-accent-green text-sm text-text-dark bg-white"
+                >
+                  <option value="all">All Polling Units</option>
+                  {uniquePollingUnits.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Row 2 — demographics + period */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <select
                   value={genderFilter}
-                  onChange={(e) => {
-                    setGenderFilter(e.target.value);
-                    setPage(1);
-                  }}
+                  onChange={(e) => { setGenderFilter(e.target.value); setPage(1); }}
                   className="px-4 py-3 border border-border-gray rounded-xl focus:outline-none focus:border-accent-green text-sm text-text-dark bg-white"
                 >
                   <option value="all">All Genders</option>
                   <option value="male">Male</option>
                   <option value="female">Female</option>
                   <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
+                <select
+                  value={ageGroupFilter}
+                  onChange={(e) => { setAgeGroupFilter(e.target.value); setPage(1); }}
+                  className="px-4 py-3 border border-border-gray rounded-xl focus:outline-none focus:border-accent-green text-sm text-text-dark bg-white"
+                >
+                  <option value="all">All Age Groups</option>
+                  <option value="18-25">18 – 25</option>
+                  <option value="26-35">26 – 35</option>
+                  <option value="36-45">36 – 45</option>
+                  <option value="46-55">46 – 55</option>
+                  <option value="56+">56 +</option>
+                </select>
+                <select
+                  value={regPeriodFilter}
+                  onChange={(e) => { setRegPeriodFilter(e.target.value); setPage(1); }}
+                  className="px-4 py-3 border border-border-gray rounded-xl focus:outline-none focus:border-accent-green text-sm text-text-dark bg-white"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="this_week">Last 7 Days</option>
+                  <option value="this_month">This Month</option>
+                  <option value="last_month">Last Month</option>
+                  <option value="this_year">This Year</option>
                 </select>
               </div>
             </div>
@@ -862,6 +1131,52 @@ export default function MembersPage() {
               </>
             )}
           </>
+        )}
+
+        {/* ── Duplicates Tab ── */}
+        {activeTab === "duplicates" && (
+          <div className="space-y-4">
+            {isLoading ? (
+              <div className="bg-white rounded-2xl border border-border-gray p-8 text-center">
+                <div className="w-8 h-8 border-2 border-accent-green border-t-transparent rounded-full animate-spin mx-auto" />
+              </div>
+            ) : duplicateGroups.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-border-gray p-16 text-center">
+                <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Check className="w-8 h-8 text-primary-green" />
+                </div>
+                <h3 className="text-lg font-semibold text-text-dark font-primary">
+                  No duplicates found
+                </h3>
+                <p className="text-text-gray text-sm mt-1">
+                  All members appear to have unique records.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-sm">
+                  <AlertTriangle size={15} className="text-amber-500 shrink-0" />
+                  <span className="text-text-gray">
+                    <span className="font-semibold text-amber-600">
+                      {duplicateGroups.length} suspected duplicate{" "}
+                      {duplicateGroups.length !== 1 ? "groups" : "group"}
+                    </span>{" "}
+                    — review and delete the unwanted record in each group.
+                  </span>
+                </div>
+                {duplicateGroups.map((group, i) => (
+                  <DuplicateGroup
+                    key={i}
+                    group={group.members}
+                    reasons={group.reasons}
+                    role={role}
+                    onView={setViewMember}
+                    onDelete={setDeleteMemberTarget}
+                  />
+                ))}
+              </>
+            )}
+          </div>
         )}
       </div>
 
