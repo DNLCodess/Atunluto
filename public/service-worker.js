@@ -1,5 +1,5 @@
 // Service Worker for Atunluto Group PWA
-const CACHE_NAME = "atunluto-v6";
+const CACHE_NAME = "atunluto-v7";
 const OFFLINE_URL = "/offline";
 
 // Files to cache on install (REMOVED /admin routes)
@@ -64,6 +64,7 @@ self.addEventListener("fetch", (event) => {
   // ✅ CRITICAL: Skip caching for these routes
   const url = new URL(event.request.url);
   const shouldSkipCache =
+    event.request.mode === "navigate" || // Never cache HTML — Next.js HTML contains hashed chunk refs that change every build; stale HTML causes chunk 404s
     url.pathname.startsWith("/dashboard") || // All admin pages
     url.pathname.startsWith("/login") || // Login page
     url.pathname.startsWith("/results-portal") || // ERMS portal (all pages + API)
