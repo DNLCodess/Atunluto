@@ -404,7 +404,7 @@ export default function AdminDashboard() {
               Members by LGA
             </h2>
             <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={lgaData} layout="horizontal">
+              <BarChart data={lgaData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                 <XAxis
                   type="number"
