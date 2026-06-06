@@ -4,36 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft } from "lucide-react";
-
-const slides = [
-  {
-    id: 1,
-    image: "/hero2.jpg",
-    title: "Our Motto",
-    subtitle: "Iṣẹ Loogun iṣẹ",
-    description:
-      "800+ change makers across 5 LGAs working together for agriculture, healthcare, education, and more.",
-  },
-  {
-    id: 2,
-    image: "/hero1.jpg",
-    title: "RESCUE OYO SOUTH",
-    subtitle: "Through Shared Responsibility",
-    description:
-      "We are not waiting for change. We are funding it ourselves through our cooperative system.",
-  },
-  {
-    id: 3,
-    image: "/hero3.jpg",
-    title: "RESCUE OUR NIGERIA",
-
-    subtitle: "One Office At A Time",
-    description:
-      "Join the movement for cooperative politics and grassroots empowerment in Oyo South Senatorial District.",
-  },
-];
+import { useSection } from "@/hooks/use-site-content";
 
 export default function Hero() {
+  const data = useSection("home.hero");
+  const slides = data.slides;
+  const { ctaPrimary, ctaSecondary } = data;
+
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
 
@@ -124,27 +101,27 @@ export default function Hero() {
 
               {/* CTA Buttons */}
               <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row md:mt-20">
-                <Link href="/join-us" className="w-full sm:w-auto">
+                <Link href={ctaPrimary.href} className="w-full sm:w-auto">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className="w-full rounded-full bg-linear-to-r from-[#d4af37] to-[#f0c85a] px-8 py-4 font-poppins text-base font-bold text-black shadow-2xl transition-all duration-300 hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] sm:w-auto md:px-10 md:py-5 md:text-lg"
                   >
                     <span className="flex items-center justify-center gap-2">
-                      Join the Movement
+                      {ctaPrimary.label}
                       <ChevronRight className="h-5 w-5" />
                     </span>
                   </motion.button>
                 </Link>
 
-                <Link href="/manifestoes" className="w-full sm:w-auto">
+                <Link href={ctaSecondary.href} className="w-full sm:w-auto">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className="w-full rounded-full border-2 border-white bg-transparent px-8 py-4 font-poppins text-base font-bold text-white backdrop-blur-sm transition-all duration-300 hover:bg-white/10 sm:w-auto md:border-4 md:px-10 md:py-5 md:text-lg"
                   >
                     <span className="flex items-center justify-center gap-2">
-                      Read Our Manifesto
+                      {ctaSecondary.label}
                       <ChevronRight className="h-5 w-5" />
                     </span>
                   </motion.button>

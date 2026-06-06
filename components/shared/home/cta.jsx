@@ -4,8 +4,11 @@ import { useInView } from "framer-motion";
 import { useRef } from "react";
 import Link from "next/link";
 import { ArrowRight, Users, CheckCircle } from "lucide-react";
+import { useSection } from "@/hooks/use-site-content";
 
 export default function CTA() {
+  const data = useSection("home.cta");
+  const benefits = data.benefits || [];
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
@@ -13,15 +16,6 @@ export default function CTA() {
     hidden: { opacity: 0, y: 30 },
     visible: { opacity: 1, y: 0 },
   };
-
-  const benefits = [
-    "Be part of a movement changing Nigerian politics",
-    "Help sponsor competent leaders from our community",
-    "Hold elected officials accountable",
-    "Access our interest-free loan schemes",
-    "Contribute to real development projects",
-    "Join 800+ change makers across Oyo South",
-  ];
 
   return (
     <section
@@ -45,11 +39,10 @@ export default function CTA() {
             className="flex flex-col justify-center"
           >
             <h2 className="font-montserrat text-3xl font-extrabold text-white sm:text-4xl md:text-5xl">
-              Ready to Rescue Nigeria?
+              {data.heading}
             </h2>
             <p className="mt-4 font-poppins text-lg text-white/90 md:text-xl">
-              Join the Atunluto movement today. Together, we fund real change
-              through cooperative politics—one office at a time.
+              {data.intro}
             </p>
 
             {/* Benefits List */}
@@ -83,10 +76,10 @@ export default function CTA() {
                 <Users className="h-8 w-8 text-white" />
                 <div>
                   <p className="font-montserrat text-2xl font-bold text-white">
-                    800+ Members
+                    {data.memberCount}
                   </p>
                   <p className="font-poppins text-sm text-white/80">
-                    Already building the future
+                    {data.memberCountSub}
                   </p>
                 </div>
               </div>
@@ -107,36 +100,25 @@ export default function CTA() {
               </div>
 
               <h3 className="font-family-sans text-2xl font-extrabold text-gray-900 md:text-3xl">
-                Become a Change Maker
+                {data.cardHeading}
               </h3>
               <p className="mt-3 font-poppins text-base text-gray-600">
-                Registration is quick and simple. Join us in building a better
-                Oyo South and Nigeria.
+                {data.cardIntro}
               </p>
 
               {/* Registration Form Preview */}
               <div className="mt-6 space-y-4">
                 <div>
                   <label className="block font-poppins text-sm font-semibold text-gray-700">
-                    What you&apos;ll need:
+                    {data.checklistHeading}
                   </label>
                   <ul className="mt-2 space-y-2 font-poppins text-sm text-gray-600">
-                    <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
-                      Full name and contact information
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
-                      Home address in Oyo South
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
-                      LGA, Ward, and Polling Unit details
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
-                      WhatsApp and Messenger contacts
-                    </li>
+                    {(data.checklist || []).map((item, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-primary-green" />
+                        {item}
+                      </li>
+                    ))}
                   </ul>
                 </div>
 

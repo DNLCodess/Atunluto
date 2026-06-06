@@ -3,33 +3,7 @@ import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
-
-const stats = [
-  {
-    value: 800,
-    suffix: "+",
-    label: "Members",
-    description: "Committed to grassroots transformation",
-  },
-  {
-    value: 5,
-    suffix: "",
-    label: "LGAs",
-    description: "Active presence across Oyo South",
-  },
-  {
-    value: 100,
-    suffix: "+",
-    label: "Businesses",
-    description: "Supported with interest-free loans",
-  },
-  {
-    value: 50,
-    suffix: "+",
-    label: "Students",
-    description: "WAEC fees paid and schools supported",
-  },
-];
+import { useSection } from "@/hooks/use-site-content";
 
 function Counter({ value, duration = 2 }) {
   const [count, setCount] = useState(0);
@@ -65,6 +39,8 @@ function Counter({ value, duration = 2 }) {
 }
 
 export default function Stats() {
+  const data = useSection("home.stats");
+  const stats = data.items || [];
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
@@ -86,13 +62,13 @@ export default function Stats() {
             className="font-montserrat text-4xl font-bold mb-4 md:text-5xl"
             style={{ color: "#ffffff" }}
           >
-            Our Impact in Numbers
+            {data.heading}
           </h2>
           <p
             className="font-poppins text-lg max-w-2xl mx-auto"
             style={{ color: "rgba(255, 255, 255, 0.8)" }}
           >
-            Since March 2024, we have been building a movement for real change
+            {data.subtitle}
           </p>
         </motion.div>
 
@@ -146,7 +122,7 @@ export default function Stats() {
             className="font-poppins text-xl font-semibold mb-6"
             style={{ color: "#ffffff" }}
           >
-            Be part of the movement transforming Oyo South
+            {data.bottomText}
           </p>
           <Link href="/join-us">
             <motion.button
@@ -158,7 +134,7 @@ export default function Stats() {
                 color: "#1b5e20",
               }}
             >
-              Join Atunluto Group
+              {data.ctaLabel}
             </motion.button>
           </Link>
         </motion.div>

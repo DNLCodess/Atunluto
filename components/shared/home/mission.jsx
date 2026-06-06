@@ -4,8 +4,10 @@ import { useInView } from "framer-motion";
 import Link from "next/link";
 import { useRef } from "react";
 import { HiArrowCircleUp, HiOutlineEye, HiArrowRight } from "react-icons/hi";
+import { useSection } from "@/hooks/use-site-content";
 
 export default function MissionVision() {
+  const data = useSection("home.missionVision");
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
@@ -51,7 +53,7 @@ export default function MissionVision() {
           className="text-center mb-16"
         >
           <h2 className="font-montserrat text-4xl font-bold text-white md:text-5xl">
-            Mission & Vision
+            {data.heading}
           </h2>
         </motion.div>
 
@@ -89,17 +91,12 @@ export default function MissionVision() {
 
               {/* Content */}
               <p className="font-poppins text-lg leading-relaxed text-white mb-6">
-                To work hard and free our people from multidimensional poverty
-                and move them into financial independence.
+                {data.mission.text}
               </p>
 
               {/* Key points */}
               <div className="space-y-3">
-                {[
-                  "Cooperative politics",
-                  "Grassroots empowerment",
-                  "Economic freedom",
-                ].map((point, index) => (
+                {(data.mission.points || []).map((point, index) => (
                   <div key={index} className="flex items-center gap-3">
                     <div className="w-1.5 h-1.5 bg-accent-green rounded-full" />
                     <span className="font-poppins text-base text-white">
@@ -151,18 +148,12 @@ export default function MissionVision() {
 
               {/* Content */}
               <p className="font-poppins text-lg leading-relaxed text-white/90 mb-6">
-                A Nigeria of prosperous people living in decent houses, with
-                access to quality infrastructure and global opportunities,
-                starting with Oyo South.
+                {data.vision.text}
               </p>
 
               {/* Key points */}
               <div className="space-y-3">
-                {[
-                  "Quality healthcare & education",
-                  "Modern infrastructure",
-                  "Economic prosperity",
-                ].map((point, index) => (
+                {(data.vision.points || []).map((point, index) => (
                   <div key={index} className="flex items-center gap-3">
                     <div className="w-1.5 h-1.5 bg-[#4caf50] rounded-full" />
                     <span className="font-poppins text-sm text-white">
@@ -208,14 +199,12 @@ export default function MissionVision() {
                   </div>
                   <div>
                     <p className="font-poppins text-xl md:text-2xl font-semibold text-gray-900 leading-relaxed">
-                      We sponsor competent candidates, hold them accountable,
-                      and maintain the power to remove them if they fail to
-                      deliver.
+                      {data.quote.text}
                     </p>
                     <div className="mt-4 flex items-center gap-3">
                       <div className="h-px flex-1 bg-gray-200 max-w-[100px]" />
                       <p className="font-poppins text-sm font-medium text-gray-600">
-                        The Atunluto Model
+                        {data.quote.attribution}
                       </p>
                     </div>
                   </div>

@@ -3,29 +3,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-
-const slides = [
-  {
-    image: "/hero1.jpg",
-    alt: "Community gathering and empowerment",
-  },
-  {
-    image: "/hero2.jpg",
-    alt: "Agricultural development initiatives",
-  },
-  {
-    image: "/hero3.jpg",
-    alt: "Healthcare support programs",
-  },
-];
-
-const stats = [
-  { value: "2027", label: "Target Year" },
-  { value: "9 LGAs", label: "Full Coverage" },
-  { value: "6", label: "Key Priorities" },
-];
+import { useSection } from "@/hooks/use-site-content";
 
 export default function Hero() {
+  const data = useSection("mv.hero");
+  const slides = data.slides || [];
+  const stats = data.stats || [];
+  const { ctaPrimary, ctaSecondary } = data;
+
   const [currentSlide, setCurrentSlide] = useState(0);
 
   // Auto-advance slides
@@ -63,7 +48,7 @@ export default function Hero() {
                 className="font-poppins text-sm font-medium"
                 style={{ color: "#ffffff" }}
               >
-                Our Purpose & Direction
+                {data.badge}
               </span>
             </div>
 
@@ -71,16 +56,14 @@ export default function Hero() {
               className="font-montserrat text-4xl font-bold md:text-5xl lg:text-6xl"
               style={{ color: "#ffffff" }}
             >
-              Mission & Vision
+              {data.heading}
             </h1>
 
             <p
               className="mt-6 font-poppins text-lg leading-relaxed md:text-xl"
               style={{ color: "rgba(255, 255, 255, 0.9)" }}
             >
-              Our commitment to transforming Oyo South through cooperative
-              politics and grassroots empowerment—guided by a clear purpose and
-              bold vision for the future.
+              {data.intro}
             </p>
 
             {/* Stats */}
@@ -112,17 +95,17 @@ export default function Hero() {
 
             {/* CTA Buttons */}
             <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Link href="#mission">
+              <Link href={ctaPrimary.href}>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   className="w-full sm:w-auto px-8 py-4 rounded-lg font-poppins font-semibold transition-all"
                   style={{ backgroundColor: "#ffffff", color: "#1b5e20" }}
                 >
-                  Read Our Mission
+                  {ctaPrimary.label}
                 </motion.button>
               </Link>
-              <Link href="#vision">
+              <Link href={ctaSecondary.href}>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -140,7 +123,7 @@ export default function Hero() {
                     e.currentTarget.style.backgroundColor = "transparent";
                   }}
                 >
-                  See Our Vision
+                  {ctaSecondary.label}
                 </motion.button>
               </Link>
             </div>
@@ -206,9 +189,11 @@ export default function Hero() {
               style={{ backgroundColor: "#2e7d32", color: "#ffffff" }}
             >
               <div className="font-montserrat text-2xl font-bold">
-                March 2024
+                {data.foundedValue}
               </div>
-              <div className="mt-1 font-poppins text-sm">Est. by OTO</div>
+              <div className="mt-1 font-poppins text-sm">
+                {data.foundedLabel}
+              </div>
             </motion.div>
           </motion.div>
         </div>

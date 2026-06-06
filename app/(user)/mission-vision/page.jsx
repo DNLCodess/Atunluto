@@ -13,6 +13,7 @@ import {
   HiArrowRight,
 } from "react-icons/hi";
 import Hero from "@/components/shared/mission/hero";
+import { useSection } from "@/hooks/use-site-content";
 
 // Animation variants
 const fadeInUp = {
@@ -127,29 +128,15 @@ function MissionVisionHero() {
 }
 
 function MissionSection() {
+  const data = useSection("mv.mission");
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
-  const goals = [
-    {
-      icon: HiOutlineUsers,
-      title: "Financial Independence",
-      description:
-        "Move our people from multidimensional poverty to self-sufficiency through structured support systems",
-    },
-    {
-      icon: HiOutlineChartBar,
-      title: "Economic Empowerment",
-      description:
-        "Build sustainable income sources through cooperative business models and interest-free loans",
-    },
-    {
-      icon: HiOutlineHeart,
-      title: "Community Development",
-      description:
-        "Strengthen social bonds and collective action for the greater good of Oyo South",
-    },
-  ];
+  const goalIcons = [HiOutlineUsers, HiOutlineChartBar, HiOutlineHeart];
+  const goals = (data.goals || []).map((g, i) => ({
+    ...g,
+    icon: goalIcons[i % goalIcons.length],
+  }));
 
   return (
     <section ref={ref} className="bg-white py-20 md:py-32">
@@ -172,25 +159,21 @@ function MissionSection() {
               variants={fadeInUp}
               className="font-montserrat text-4xl font-bold text-[#1b5e20] mb-6"
             >
-              Our Mission
+              {data.heading}
             </motion.h2>
 
             <motion.p
               variants={fadeInUp}
               className="font-poppins text-2xl text-gray-900 font-semibold leading-relaxed mb-8"
             >
-              To work hard and free our people from multidimensional poverty and
-              move them into financial independence.
+              {data.statement}
             </motion.p>
 
             <motion.p
               variants={fadeInUp}
               className="font-poppins text-lg text-gray-700 leading-relaxed"
             >
-              Through cooperative politics and grassroots mobilization, we
-              create opportunities for economic empowerment, quality education,
-              accessible healthcare, and sustainable development across Oyo
-              South Senatorial District.
+              {data.body}
             </motion.p>
 
             {/* Action link */}
@@ -243,31 +226,11 @@ function MissionSection() {
 }
 
 function VisionSection() {
+  const data = useSection("mv.vision");
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
-  const visionPoints = [
-    {
-      title: "Prosperous Communities",
-      description:
-        "People living in decent houses with access to good roads, quality schools, and modern healthcare facilities",
-    },
-    {
-      title: "Economic Opportunity",
-      description:
-        "Well-paying employment based on individual preferences and skills, matching standards in developed nations",
-    },
-    {
-      title: "Quality Infrastructure",
-      description:
-        "Recreational facilities, transportation networks, and public services that rival Western standards",
-    },
-    {
-      title: "Empowered Citizens",
-      description:
-        "Communities capable of self-governance and sustainable development without external dependency",
-    },
-  ];
+  const visionPoints = data.points || [];
 
   return (
     <section
@@ -329,25 +292,21 @@ function VisionSection() {
               variants={fadeInUp}
               className="font-montserrat text-4xl font-bold text-white mb-6"
             >
-              Our Vision
+              {data.heading}
             </motion.h2>
 
             <motion.p
               variants={fadeInUp}
               className="font-poppins text-2xl text-white font-semibold leading-relaxed mb-8"
             >
-              To see a Nigeria populated by prosperous people capable of doing
-              what others are doing in the Western world.
+              {data.statement}
             </motion.p>
 
             <motion.p
               variants={fadeInUp}
               className="font-poppins text-lg text-white/90 leading-relaxed"
             >
-              Starting with Oyo South, we envision communities where every
-              citizen has access to quality education, healthcare,
-              infrastructure, and economic opportunities that match global
-              standards.
+              {data.body}
             </motion.p>
 
             {/* Stats */}
@@ -355,22 +314,16 @@ function VisionSection() {
               variants={fadeInUp}
               className="mt-10 grid grid-cols-2 gap-6"
             >
-              <div className="border-l-4 border-[#4caf50] pl-4">
-                <div className="font-montserrat text-3xl font-bold text-[#4caf50]">
-                  2027
+              {(data.stats || []).map((stat, i) => (
+                <div key={i} className="border-l-4 border-[#4caf50] pl-4">
+                  <div className="font-montserrat text-3xl font-bold text-[#4caf50]">
+                    {stat.value}
+                  </div>
+                  <div className="font-poppins text-sm text-white/70 mt-1">
+                    {stat.label}
+                  </div>
                 </div>
-                <div className="font-poppins text-sm text-white/70 mt-1">
-                  Target Year
-                </div>
-              </div>
-              <div className="border-l-4 border-[#4caf50] pl-4">
-                <div className="font-montserrat text-3xl font-bold text-[#4caf50]">
-                  9 LGAs
-                </div>
-                <div className="font-poppins text-sm text-white/70 mt-1">
-                  Full Coverage
-                </div>
-              </div>
+              ))}
             </motion.div>
           </motion.div>
         </div>
@@ -380,35 +333,11 @@ function VisionSection() {
 }
 
 function CoreValues() {
+  const data = useSection("mv.values");
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
-  const values = [
-    {
-      title: "Transparency",
-      description:
-        "Open governance where members see how resources are spent and decisions are made",
-      color: "#1b5e20",
-    },
-    {
-      title: "Accountability",
-      description:
-        "Leaders answer to the collective, not individual sponsors or external interests",
-      color: "#2e7d32",
-    },
-    {
-      title: "Cooperation",
-      description:
-        "Shared responsibility and collective action—we rise together or not at all",
-      color: "#4caf50",
-    },
-    {
-      title: "Development",
-      description:
-        "Focus on systemic progress over handouts—building infrastructure, not dependency",
-      color: "#66bb6a",
-    },
-  ];
+  const values = data.values || [];
 
   return (
     <section ref={ref} className="bg-white py-20 md:py-32">
@@ -420,10 +349,10 @@ function CoreValues() {
           className="text-center mb-16"
         >
           <h2 className="font-montserrat text-4xl font-bold text-[#1b5e20] mb-4">
-            Our Core Values
+            {data.heading}
           </h2>
           <p className="font-poppins text-lg text-gray-700 max-w-2xl mx-auto">
-            The principles that guide every decision and action we take
+            {data.intro}
           </p>
         </motion.div>
 
@@ -463,6 +392,7 @@ function CoreValues() {
 }
 
 function CallToAction() {
+  const data = useSection("mv.cta");
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
@@ -481,15 +411,14 @@ function CallToAction() {
             variants={fadeInUp}
             className="font-montserrat text-3xl font-bold text-white md:text-4xl mb-6"
           >
-            Join Us in Building This Future
+            {data.heading}
           </motion.h2>
 
           <motion.p
             variants={fadeInUp}
             className="font-poppins text-xl text-white/90 mb-10 leading-relaxed"
           >
-            Our mission and vision require collective action. Be part of the
-            movement transforming Oyo South through cooperative politics.
+            {data.intro}
           </motion.p>
 
           <motion.div
@@ -497,22 +426,22 @@ function CallToAction() {
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
             <motion.a
-              href="/join-us"
+              href={data.ctaPrimary.href}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="inline-flex items-center justify-center gap-2 bg-white text-[#1b5e20] px-8 py-4 rounded-xl font-poppins font-semibold shadow-lg hover:shadow-xl transition-shadow"
             >
-              Join the Movement
+              {data.ctaPrimary.label}
               <HiArrowRight className="w-5 h-5" />
             </motion.a>
 
             <motion.a
-              href="/manifestoes"
+              href={data.ctaSecondary.href}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm text-white border-2 border-white/30 px-8 py-4 rounded-xl font-poppins font-semibold hover:bg-white/20 transition-colors"
             >
-              Read Our Manifestos
+              {data.ctaSecondary.label}
             </motion.a>
           </motion.div>
         </motion.div>

@@ -3,41 +3,11 @@ import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef } from "react";
 import Link from "next/link";
-
-const manifestos = [
-  {
-    title: "Agriculture",
-    focus: "10 tractors per agrarian LGA for farm mechanization",
-    target: "Triple cultivated acres",
-  },
-  {
-    title: "Healthcare",
-    focus: "Health insurance for 500+ vulnerable per LGA",
-    target: "All 9 LGAs covered",
-  },
-  {
-    title: "Education",
-    focus: "School repairs and teacher training upgrades",
-    target: "Western standards trajectory",
-  },
-  {
-    title: "Entrepreneurship",
-    focus: "Interest-free loans and transport union support",
-    target: "Coverage across 9 LGAs",
-  },
-  {
-    title: "Tourism",
-    focus: "Olokemeji reserves and Ibarapa mountain ranges",
-    target: "Investor partnerships",
-  },
-  {
-    title: "Transport",
-    focus: "High-capacity CNG buses with route reorganization",
-    target: "Reduced congestion",
-  },
-];
+import { useSection } from "@/hooks/use-site-content";
 
 export default function Manifestos() {
+  const data = useSection("home.pillars");
+  const manifestos = data.items || [];
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
@@ -61,13 +31,13 @@ export default function Manifestos() {
                 className="font-poppins text-sm font-medium mb-4 tracking-wide uppercase"
                 style={{ color: "#757575" }}
               >
-                Strategic Framework
+                {data.eyebrow}
               </p>
               <h2
                 className="font-montserrat text-5xl md:text-6xl font-bold leading-tight"
                 style={{ color: "#212121" }}
               >
-                Six Pillars of Development
+                {data.heading}
               </h2>
             </div>
             <div className="md:text-right">
@@ -75,9 +45,7 @@ export default function Manifestos() {
                 className="font-poppins text-lg leading-relaxed"
                 style={{ color: "#757575" }}
               >
-                Our comprehensive approach to transforming Oyo South Senatorial
-                District through evidence-based policy and grassroots
-                implementation.
+                {data.intro}
               </p>
             </div>
           </div>
@@ -197,39 +165,19 @@ export default function Manifestos() {
           transition={{ duration: 0.6, delay: 0.5 }}
           className="mt-12 grid md:grid-cols-3 gap-8"
         >
-          <div className="text-center md:text-left">
-            <p
-              className="font-montserrat text-4xl font-bold mb-2"
-              style={{ color: "#1b5e20" }}
-            >
-              2027
-            </p>
-            <p className="font-poppins text-sm" style={{ color: "#757575" }}>
-              Implementation from electoral wins
-            </p>
-          </div>
-          <div className="text-center md:text-left">
-            <p
-              className="font-montserrat text-4xl font-bold mb-2"
-              style={{ color: "#1b5e20" }}
-            >
-              9 LGAs
-            </p>
-            <p className="font-poppins text-sm" style={{ color: "#757575" }}>
-              Across Oyo South district
-            </p>
-          </div>
-          <div className="text-center md:text-left">
-            <p
-              className="font-montserrat text-4xl font-bold mb-2"
-              style={{ color: "#1b5e20" }}
-            >
-              4 Years
-            </p>
-            <p className="font-poppins text-sm" style={{ color: "#757575" }}>
-              To transform trajectory
-            </p>
-          </div>
+          {(data.stats || []).map((stat, i) => (
+            <div key={i} className="text-center md:text-left">
+              <p
+                className="font-montserrat text-4xl font-bold mb-2"
+                style={{ color: "#1b5e20" }}
+              >
+                {stat.value}
+              </p>
+              <p className="font-poppins text-sm" style={{ color: "#757575" }}>
+                {stat.label}
+              </p>
+            </div>
+          ))}
         </motion.div>
 
         {/* CTA */}

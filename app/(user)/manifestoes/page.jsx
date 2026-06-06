@@ -3,83 +3,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-
-const slides = [
-  { image: "/manifesto1.jpg", alt: "Agriculture development" },
-  { image: "/manifesto2.jpg", alt: "Healthcare services" },
-  { image: "/manifesto3.jpg", alt: "Education infrastructure" },
-  { image: "/manifesto4.jpg", alt: "Community empowerment" },
-];
-
-const stats = [
-  { value: "2027", label: "Target Start" },
-  { value: "9 LGAs", label: "Full Coverage" },
-  { value: "6", label: "Priority Areas" },
-];
-
-const manifestos = [
-  {
-    title: "Agriculture",
-    subtitle: "Farm Mechanization",
-    description:
-      "We believe as agrarian societies, farm mechanization is the way forward. We will seek to have at least 10 brand new tractors in each agrarian LGA across Oyo South: Ibarapa North, Ibarapa Central, Ibarapa East, Ido, and Ibadan South West.",
-    target: "Triple the number of acres currently cultivated across these LGAs",
-    timeline: "Within 4 years from 2027 electoral wins",
-    color: "#2E7D32",
-  },
-  {
-    title: "Healthcare",
-    subtitle: "Universal Health Insurance",
-    description:
-      "We will promote health insurance across all 9 LGAs in Oyo South. Atunluto will pay for at least 500 most vulnerable people per LGA and subsidize a further 500. We'll bring together HMO clusters to provide affordable schemes and promote hospital registrations into the national health insurance scheme.",
-    target:
-      "Specialist treatment accessible through hospital equipment adoption",
-    timeline: "500+ vulnerable covered per LGA",
-    color: "#E53935",
-  },
-  {
-    title: "Education",
-    subtitle: "Infrastructure, Teacher Development & Digital Literacy",
-    description:
-      "We will ensure office holders from this group work towards improvements in learning environments through repairs of existing structures, building new ones, and insisting on teacher upgrades so learning outcomes match Western world standards. We will provide digital and ICT training for WAEC students to help them excel in their CBT (Computer-Based Test) exams, ensuring our students are well-prepared for modern examination formats.",
-    target:
-      "Significant improvement in educational standards and digital literacy within 4 years",
-    timeline:
-      "Technical colleges upgraded with laboratory equipment and overseas volunteer teachers. ICT training centers established in schools to prepare WAEC students for CBT exams.",
-    color: "#1976D2",
-  },
-  {
-    title: "Entrepreneurship",
-    subtitle: "Interest-Free Loans & Business Support",
-    description:
-      "We will continue granting loans to artisans, traders, farmers, and business owners to improve livelihoods. From 2027 electoral wins, we'll syndicate loans with commercial banks across Oyo South for broader reach.",
-    target: "Coverage across all 9 LGAs",
-    timeline: "Over 1 million SME loans in the first year alone",
-    color: "#F57C00",
-  },
-  {
-    title: "Tourism",
-    subtitle: "Natural Heritage Development",
-    description:
-      "We intend to work with investors to revamp our tourism sector: Olokemeji forest reserves and mountain ranges in Ibarapa North. These attractions can rival Western tourist destinations where people pay huge sums for holidays.",
-    target: "Alternative destination for Western tourists",
-    timeline:
-      "Partnerships with West African tourism groups (Gambia, Ghana) and local investors",
-    color: "#00796B",
-  },
-  {
-    title: "Transport",
-    subtitle: "Modern Public Transit",
-    description:
-      "High-capacity CNG buses will reduce road congestion. We'll work with transport unions and government agencies to redraft routes so vehicles pass through inner residential areas like in other countries, reducing the need for long-distance okada rides.",
-    target: "Reduced congestion and improved mobility",
-    timeline:
-      "Reorganize transport unions to access CNG buses on hire purchase",
-    color: "#5E35B1",
-  },
-];
+import { useSection } from "@/hooks/use-site-content";
 
 export default function ManifestosPage() {
+  const hero = useSection("manifestoes.hero");
+  const cta = useSection("manifestoes.cta");
+  const slides = hero.slides || [];
+  const stats = hero.stats || [];
+  const manifestos = useSection("manifestoes.items").items || [];
+
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
@@ -115,7 +47,7 @@ export default function ManifestosPage() {
                   className="font-poppins text-sm font-medium"
                   style={{ color: "#ffffff" }}
                 >
-                  Development Blueprint
+                  {hero.badge}
                 </span>
               </div>
 
@@ -123,16 +55,14 @@ export default function ManifestosPage() {
                 className="font-montserrat text-4xl font-bold md:text-5xl lg:text-6xl"
                 style={{ color: "#ffffff" }}
               >
-                Our Manifestos
+                {hero.heading}
               </h1>
 
               <p
                 className="mt-6 font-poppins text-lg leading-relaxed md:text-xl"
                 style={{ color: "rgba(255, 255, 255, 0.9)" }}
               >
-                Six strategic priorities for transforming Oyo South Senatorial
-                District through evidence-based policy, grassroots
-                implementation, and measurable outcomes.
+                {hero.intro}
               </p>
 
               <div className="mt-10 grid grid-cols-3 gap-6">
@@ -162,16 +92,16 @@ export default function ManifestosPage() {
               </div>
 
               <div className="mt-10 flex flex-col sm:flex-row gap-4">
-                <Link href="#agriculture">
+                <Link href={hero.ctaPrimary.href}>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     className="w-full sm:w-auto px-8 py-4 rounded-lg font-poppins font-semibold"
                     style={{ backgroundColor: "#ffffff", color: "#1b5e20" }}
                   >
-                    Read Details
+                    {hero.ctaPrimary.label}
                   </motion.button>
                 </Link>
-                <Link href="/join-us">
+                <Link href={hero.ctaSecondary.href}>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     className="w-full sm:w-auto px-8 py-4 rounded-lg border-2 font-poppins font-semibold"
@@ -181,7 +111,7 @@ export default function ManifestosPage() {
                       backgroundColor: "transparent",
                     }}
                   >
-                    Join the Movement
+                    {hero.ctaSecondary.label}
                   </motion.button>
                 </Link>
               </div>
@@ -241,9 +171,11 @@ export default function ManifestosPage() {
                 style={{ backgroundColor: "#2e7d32", color: "#ffffff" }}
               >
                 <div className="font-montserrat text-2xl font-bold">
-                  4 Years
+                  {hero.badgeCardValue}
                 </div>
-                <div className="mt-1 font-poppins text-sm">Implementation</div>
+                <div className="mt-1 font-poppins text-sm">
+                  {hero.badgeCardLabel}
+                </div>
               </motion.div>
             </motion.div>
           </div>
@@ -374,14 +306,13 @@ export default function ManifestosPage() {
               className="font-montserrat text-3xl font-bold mb-6 md:text-4xl"
               style={{ color: "#ffffff" }}
             >
-              Be Part of This Transformation
+              {cta.heading}
             </h2>
             <p
               className="font-poppins text-xl mb-8"
               style={{ color: "rgba(255, 255, 255, 0.9)" }}
             >
-              Join us in implementing these development priorities across Oyo
-              South
+              {cta.intro}
             </p>
             <Link href="/join-us">
               <motion.button
@@ -389,7 +320,7 @@ export default function ManifestosPage() {
                 className="px-12 py-4 rounded-lg font-poppins font-semibold"
                 style={{ backgroundColor: "#ffffff", color: "#1b5e20" }}
               >
-                Join Atunluto Group
+                {cta.ctaLabel}
               </motion.button>
             </Link>
           </motion.div>

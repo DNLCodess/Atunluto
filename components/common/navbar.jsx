@@ -5,17 +5,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSection } from "@/hooks/use-site-content";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
-
-  const navLinks = [
-    { name: "Home", href: "/" },
-    { name: "About Us", href: "/about" },
-    { name: "Mission", href: "/mission-vision" },
-    { name: "Manifesto", href: "/manifestoes" },
-    { name: "Gallery", href: "/gallery" },
-  ];
+  const settings = useSection("site.settings");
+  const navLinks = settings.navLinks;
+  const brandName = settings.brandName;
+  const logo = settings.logo || "/logo.png";
+  const joinCtaLabel = settings.joinCtaLabel;
 
   return (
     <>
@@ -30,7 +28,7 @@ export default function Navbar() {
           {/* LOGO */}
           <Link href="/" className="flex items-center gap-3">
             <Image
-              src="/logo.png" // 👈 replace with your actual file
+              src={logo}
               alt="Atunluto Group Logo"
               width={42}
               height={42}
@@ -38,7 +36,7 @@ export default function Navbar() {
               priority
             />
             <span className="font-bold text-green-700 text-xl tracking-wide hidden sm:block">
-              ATUNLUTO
+              {brandName}
             </span>
           </Link>
 
@@ -61,7 +59,7 @@ export default function Navbar() {
               href="/join-us"
               className="px-5 py-2 bg-green-700 text-white font-semibold rounded-full hover:bg-green-600 transition-all"
             >
-              Join Us
+              {joinCtaLabel}
             </Link>
           </div>
 
@@ -88,14 +86,14 @@ export default function Navbar() {
             <div className="flex justify-between items-center p-6 border-b">
               <div className="flex items-center gap-3">
                 <Image
-                  src="/logo.png"
+                  src={logo}
                   alt="Atunluto Mobile Logo"
                   width={40}
                   height={40}
                   className="object-contain"
                 />
                 <span className="font-bold text-green-700 text-xl">
-                  ATUNLUTO
+                  {brandName}
                 </span>
               </div>
 
@@ -128,7 +126,7 @@ export default function Navbar() {
                   onClick={() => setOpen(false)}
                   className="block text-center px-5 py-3 bg-green-700 text-white rounded-full font-semibold"
                 >
-                  Join Us
+                  {joinCtaLabel}
                 </Link>
               </div>
             </div>

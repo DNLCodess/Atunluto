@@ -2,8 +2,10 @@
 import { motion } from "framer-motion";
 import { useInView } from "framer-motion";
 import { useRef } from "react";
+import { useSection } from "@/hooks/use-site-content";
 
 export default function About() {
+  const data = useSection("home.about");
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
@@ -17,35 +19,18 @@ export default function About() {
           className="space-y-8"
         >
           <h2 className="font-montserrat text-3xl font-bold text-gray-900 md:text-4xl">
-            About Atunluto Group
+            {data.heading}
           </h2>
 
           <div className="space-y-6 font-poppins text-lg leading-relaxed text-gray-700">
-            <p>
-              Atunluto Group is a political association of men and women
-              committed to transforming Oyo South Senatorial District through
-              cooperative politics and shared responsibility.
-            </p>
-
-            <p>
-              Founded in March 2024, we operate on a simple principle: politics
-              should serve the people, not personal interests. Our members fund
-              and own the political structure, ensuring accountability from the
-              ground up.
-            </p>
-
-            <p>
-              We sponsor competent candidates from our ranks, hold them
-              accountable, and maintain the power to remove leaders who fail to
-              deliver on their promises to the community.
-            </p>
+            {(data.paragraphs || []).map((para, i) => (
+              <p key={i}>{para}</p>
+            ))}
           </div>
 
           <div className="border-l-4 border-primary bg-light/30 p-6 md:p-8">
             <p className="font-poppins text-base italic text-gray-800 md:text-lg">
-              &quot;We are not waiting for change. We are funding it
-              ourselves—through shared responsibility and cooperative
-              action.&rdquo;
+              &ldquo;{data.quote}&rdquo;
             </p>
           </div>
         </motion.div>

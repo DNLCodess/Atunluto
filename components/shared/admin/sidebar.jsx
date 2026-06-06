@@ -97,6 +97,26 @@ const Icons = {
       <polyline points="21 15 16 10 5 21" />
     </svg>
   ),
+  FileText: (props) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={props.size ?? 18}
+      height={props.size ?? 18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+    >
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+      <line x1="10" y1="9" x2="8" y2="9" />
+    </svg>
+  ),
   Building2: (props) => (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -216,6 +236,11 @@ function getNavItems(role) {
       href: "/dashboard/gallery",
       icon: Icons.Image,
     },
+    content: {
+      label: "Site Content",
+      href: "/dashboard/content",
+      icon: Icons.FileText,
+    },
   };
 
   switch (role) {
@@ -226,6 +251,7 @@ function getNavItems(role) {
         all.addMember,
         all.admins,
         all.gallery,
+        all.content,
       ];
     case "super_user":
       return [
@@ -234,13 +260,14 @@ function getNavItems(role) {
         all.addMember,
         all.admins,
         all.gallery,
+        all.content,
       ];
     case "administrator":
       return [all.dashboard, all.members, all.addMember, all.gallery];
     case "registration":
       return [all.dashboard, all.addMember, all.members];
     case "manager":
-      return [all.dashboard, all.gallery];
+      return [all.dashboard, all.gallery, all.content];
     default:
       return [all.dashboard];
   }

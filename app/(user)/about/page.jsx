@@ -3,42 +3,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-
-const slides = [
-  { image: "/about1.jpg", alt: "Atunluto Group community meeting" },
-  { image: "/about2.jpg", alt: "Members collaboration" },
-  { image: "/about3.jpg", alt: "Grassroots empowerment" },
-  { image: "/about4.jpg", alt: "Community development" },
-];
-
-const stats = [
-  { value: "Mar 2024", label: "Founded" },
-  { value: "5 LGAs", label: "Initial Reach" },
-  { value: "800+", label: "Members" },
-];
-
-const coreValues = [
-  {
-    title: "Shared Responsibility",
-    description:
-      "Members fund the movement through contributions, not handouts from politicians",
-  },
-  {
-    title: "Accountability",
-    description:
-      "We sponsor candidates and can impeach them if they fail to deliver",
-  },
-  {
-    title: "Development Over Handouts",
-    description: "Focus on infrastructure and systems, not temporary relief",
-  },
-  {
-    title: "Cooperative Model",
-    description: "Replicating the successful thrift system in politics",
-  },
-];
+import { useSection } from "@/hooks/use-site-content";
 
 export default function AboutPage() {
+  const hero = useSection("about.hero");
+  const problem = useSection("about.problem");
+  const model = useSection("about.model");
+  const achievements = useSection("about.achievements");
+  const cta = useSection("about.cta");
+
+  const slides = hero.slides || [];
+  const stats = hero.stats || [];
+  const coreValues = model.values || [];
+
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
@@ -75,7 +52,7 @@ export default function AboutPage() {
                   className="font-poppins text-sm font-medium"
                   style={{ color: "#ffffff" }}
                 >
-                  Who We Are
+                  {hero.badge}
                 </span>
               </div>
 
@@ -83,17 +60,14 @@ export default function AboutPage() {
                 className="font-montserrat text-4xl font-bold md:text-5xl lg:text-6xl"
                 style={{ color: "#ffffff" }}
               >
-                About Atunluto Group
+                {hero.heading}
               </h1>
 
               <p
                 className="mt-6 font-poppins text-lg leading-relaxed md:text-xl"
                 style={{ color: "rgba(255, 255, 255, 0.9)" }}
               >
-                A political association of change makers committed to
-                transforming Oyo South through cooperative politics—where
-                members own the structure, sponsor candidates, and demand
-                accountability.
+                {hero.intro}
               </p>
 
               {/* Stats */}
@@ -124,16 +98,16 @@ export default function AboutPage() {
               </div>
 
               <div className="mt-10 flex flex-col sm:flex-row gap-4">
-                <Link href="/join-us">
+                <Link href={hero.ctaPrimary.href}>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     className="w-full sm:w-auto px-8 py-4 rounded-lg font-poppins font-semibold"
                     style={{ backgroundColor: "#ffffff", color: "#1b5e20" }}
                   >
-                    Join Us Today
+                    {hero.ctaPrimary.label}
                   </motion.button>
                 </Link>
-                <Link href="/mission-vision">
+                <Link href={hero.ctaSecondary.href}>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     className="w-full sm:w-auto px-8 py-4 rounded-lg border-2 font-poppins font-semibold"
@@ -143,7 +117,7 @@ export default function AboutPage() {
                       backgroundColor: "transparent",
                     }}
                   >
-                    Our Mission & Vision
+                    {hero.ctaSecondary.label}
                   </motion.button>
                 </Link>
               </div>
@@ -203,8 +177,12 @@ export default function AboutPage() {
                 className="absolute -bottom-6 -right-6 rounded-xl p-6 shadow-lg"
                 style={{ backgroundColor: "#2e7d32", color: "#ffffff" }}
               >
-                <div className="font-montserrat text-2xl font-bold">OTO</div>
-                <div className="mt-1 font-poppins text-sm">Founder</div>
+                <div className="font-montserrat text-2xl font-bold">
+                  {hero.founderName}
+                </div>
+                <div className="mt-1 font-poppins text-sm">
+                  {hero.founderTitle}
+                </div>
               </motion.div>
             </motion.div>
           </div>
@@ -228,7 +206,7 @@ export default function AboutPage() {
               className="font-montserrat text-3xl font-bold mb-6 md:text-4xl"
               style={{ color: "#1b5e20" }}
             >
-              Why Atunluto Exists
+              {problem.heading}
             </h2>
             <div
               className="h-1 w-20 rounded-full mb-8"
@@ -237,78 +215,30 @@ export default function AboutPage() {
           </motion.div>
 
           <div className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="pl-6"
-              style={{ borderLeft: "3px solid #e0e0e0" }}
-            >
-              <h3
-                className="font-montserrat text-xl font-bold mb-3"
-                style={{ color: "#212121" }}
+            {(problem.items || []).map((block, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="pl-6"
+                style={{ borderLeft: "3px solid #e0e0e0" }}
               >
-                The Current System Breeds Poverty by Design
-              </h3>
-              <p
-                className="font-poppins text-base leading-relaxed"
-                style={{ color: "#757575" }}
-              >
-                Money politics makes politicians spend their last kobo to get
-                into office, forcing them to steal once elected. Campaign
-                handouts that could repair health centers or fix roads are
-                consumed instead of invested in development.
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="pl-6"
-              style={{ borderLeft: "3px solid #e0e0e0" }}
-            >
-              <h3
-                className="font-montserrat text-xl font-bold mb-3"
-                style={{ color: "#212121" }}
-              >
-                No Accountability Structure
-              </h3>
-              <p
-                className="font-poppins text-base leading-relaxed"
-                style={{ color: "#757575" }}
-              >
-                Politicians are not caucused, making impeachment impossible.
-                They answer to individual sponsors rather than the collective
-                good, leading to personal aggrandizement over public service.
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="pl-6"
-              style={{ borderLeft: "3px solid #e0e0e0" }}
-            >
-              <h3
-                className="font-montserrat text-xl font-bold mb-3"
-                style={{ color: "#212121" }}
-              >
-                We Are the Problem
-              </h3>
-              <p
-                className="font-poppins text-base leading-relaxed"
-                style={{ color: "#757575" }}
-              >
-                Everyone wants change but expects others to change first. We
-                wait for society to transform like Western countries we watch on
-                TV, without doing what they do: thinking of others, working for
-                the greater good, and separating governance from personal gain.
-              </p>
-            </motion.div>
+                <h3
+                  className="font-montserrat text-xl font-bold mb-3"
+                  style={{ color: "#212121" }}
+                >
+                  {block.title}
+                </h3>
+                <p
+                  className="font-poppins text-base leading-relaxed"
+                  style={{ color: "#757575" }}
+                >
+                  {block.description}
+                </p>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
@@ -329,14 +259,13 @@ export default function AboutPage() {
               className="font-montserrat text-3xl font-bold mb-4 md:text-4xl"
               style={{ color: "#1b5e20" }}
             >
-              The Atunluto Model
+              {model.heading}
             </h2>
             <p
               className="font-poppins text-lg max-w-2xl mx-auto"
               style={{ color: "#757575" }}
             >
-              Replicating the cooperative thrift system within the body polity
-              of Oyo South
+              {model.intro}
             </p>
           </motion.div>
 
@@ -388,71 +317,44 @@ export default function AboutPage() {
               className="font-montserrat text-3xl font-bold mb-6 md:text-4xl"
               style={{ color: "#1b5e20" }}
             >
-              What We Have Done
+              {achievements.heading}
             </h2>
             <p className="font-poppins text-lg" style={{ color: "#757575" }}>
-              Early interventions showing what Atunluto means in practice
+              {achievements.intro}
             </p>
           </motion.div>
 
           <div className="grid md:grid-cols-2 gap-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="p-8 rounded-xl"
-              style={{ backgroundColor: "#E8F5E9" }}
-            >
-              <div
-                className="font-montserrat text-4xl font-bold mb-3"
-                style={{ color: "#1b5e20" }}
+            {(achievements.items || []).map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="p-8 rounded-xl"
+                style={{ backgroundColor: "#E8F5E9" }}
               >
-                50+
-              </div>
-              <h3
-                className="font-montserrat text-xl font-bold mb-3"
-                style={{ color: "#212121" }}
-              >
-                Education Support
-              </h3>
-              <p
-                className="font-poppins text-base leading-relaxed"
-                style={{ color: "#424242" }}
-              >
-                WAEC fees paid for students and bush cutting machines provided
-                for school fields across three LGAs in Oyo South district.
-              </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="p-8 rounded-xl"
-              style={{ backgroundColor: "#E8F5E9" }}
-            >
-              <div
-                className="font-montserrat text-4xl font-bold mb-3"
-                style={{ color: "#1b5e20" }}
-              >
-                ₦50K - ₦100K
-              </div>
-              <h3
-                className="font-montserrat text-xl font-bold mb-3"
-                style={{ color: "#212121" }}
-              >
-                Interest-Free Loans
-              </h3>
-              <p
-                className="font-poppins text-base leading-relaxed"
-                style={{ color: "#424242" }}
-              >
-                Small traders receiving loans to grow their businesses.
-                Beneficiaries who do well can move up from ₦50,000 to ₦75,000
-                and ₦100,000.
-              </p>
-            </motion.div>
+                <div
+                  className="font-montserrat text-4xl font-bold mb-3"
+                  style={{ color: "#1b5e20" }}
+                >
+                  {item.value}
+                </div>
+                <h3
+                  className="font-montserrat text-xl font-bold mb-3"
+                  style={{ color: "#212121" }}
+                >
+                  {item.title}
+                </h3>
+                <p
+                  className="font-poppins text-base leading-relaxed"
+                  style={{ color: "#424242" }}
+                >
+                  {item.description}
+                </p>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
@@ -472,14 +374,13 @@ export default function AboutPage() {
               className="font-montserrat text-3xl font-bold mb-6 md:text-4xl"
               style={{ color: "#ffffff" }}
             >
-              Join the Political Caucus
+              {cta.heading}
             </h2>
             <p
               className="font-poppins text-xl mb-8"
               style={{ color: "rgba(255, 255, 255, 0.9)" }}
             >
-              Start the journey with us towards rescuing Nigeria, one office at
-              a time
+              {cta.intro}
             </p>
             <Link href="/join-us">
               <motion.button
@@ -487,7 +388,7 @@ export default function AboutPage() {
                 className="px-12 py-4 rounded-lg font-poppins font-semibold"
                 style={{ backgroundColor: "#ffffff", color: "#1b5e20" }}
               >
-                Become a Member
+                {cta.ctaLabel}
               </motion.button>
             </Link>
           </motion.div>
