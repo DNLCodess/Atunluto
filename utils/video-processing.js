@@ -32,7 +32,7 @@ export async function validateVideoFile(file) {
   if (!file.type.startsWith("video/")) {
     return { valid: false, error: "Please select a video file." };
   }
-  if (file.size > MAX_VIDEO_BYTES) {
+  if (file.size >= MAX_VIDEO_BYTES) {
     return { valid: false, error: "Video must be less than 100MB." };
   }
 

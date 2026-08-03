@@ -27,15 +27,17 @@ export default function FullScreenVideoViewer({
     }
   }, []);
 
-  // Pause whenever the displayed video changes (prev/next navigation)
+  // Pause whenever the displayed video changes (prev/next navigation).
+  // The <video> is keyed by image.id, so it remounts on navigation — by the
+  // time an effect body runs after that, videoRef.current already points at
+  // the *new* element. Capturing the element here and pausing it in the
+  // cleanup (which React runs before the next render commits) ensures the
+  // *outgoing* video — the one that may still be mid-playback — is the one
+  // that actually gets paused.
   useEffect(() => {
-    pauseVideo();
-  }, [currentIndex, pauseVideo]);
-
-  // Pause on unmount (viewer closed)
-  useEffect(() => {
-    return () => pauseVideo();
-  }, [pauseVideo]);
+    const el = videoRef.current;
+    return () => el?.pause();
+  }, [currentIndex]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {

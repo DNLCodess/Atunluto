@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { Play, Calendar, Tag } from "lucide-react";
+import { Play, Calendar, Tag, Video } from "lucide-react";
 import { formatDuration } from "@/utils/video-processing";
 
 export default function VideoCard({ image, onClick, index }) {
@@ -31,22 +31,30 @@ export default function VideoCard({ image, onClick, index }) {
       className="relative flex-shrink-0 w-80 aspect-video rounded-2xl overflow-hidden bg-gray-100 cursor-pointer shadow-lg hover:shadow-2xl transition-smooth group touch-target"
     >
       {/* Poster image — the only bytes ever loaded until this card is clicked */}
-      <div className="absolute inset-0">
-        <Image
-          src={image.poster_url}
-          alt={image.title}
-          fill
-          className={`object-cover transition-smooth-slow group-hover:scale-110 ${
-            isLoaded ? "opacity-100 animate-fade-in" : "opacity-0"
-          }`}
-          sizes="320px"
-          quality={85}
-          onLoad={() => setIsLoaded(true)}
-          draggable={false}
-        />
-      </div>
+      {image.poster_url ? (
+        <div className="absolute inset-0">
+          <Image
+            src={image.poster_url}
+            alt={image.title}
+            fill
+            className={`object-cover transition-smooth-slow group-hover:scale-110 ${
+              isLoaded ? "opacity-100 animate-fade-in" : "opacity-0"
+            }`}
+            sizes="320px"
+            quality={85}
+            onLoad={() => setIsLoaded(true)}
+            draggable={false}
+          />
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+          <Video className="w-10 h-10 text-gray-400" />
+        </div>
+      )}
 
-      {!isLoaded && <div className="absolute inset-0 skeleton-loading" />}
+      {!isLoaded && image.poster_url && (
+        <div className="absolute inset-0 skeleton-loading" />
+      )}
 
       {/* Play button */}
       <div className="absolute inset-0 flex items-center justify-center z-20">

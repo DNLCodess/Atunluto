@@ -1,7 +1,7 @@
 // lib/hooks/useGallery.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/supabase/client";
-import { buildPosterUrl, buildVideoUrl } from "@/utils/video-processing";
+import { buildPosterUrl } from "@/utils/video-processing";
 
 const supabase = createClient();
 
@@ -93,31 +93,42 @@ async function uploadImageFn({ file, thumbnailFile, title, description, category
   return data;
 }
 
-async function uploadVideoFn({ file, title, description, category, userId }) {
+async function uploadVideoFn({ file, title, description, category, userId, clientDuration }) {
   const signRes = await fetch("/api/cloudinary-sign?folder=gallery/videos");
   if (!signRes.ok) throw new Error("Failed to get upload credentials.");
   const signParams = await signRes.json();
 
   const result = await cloudinaryVideoUpload(file, signParams);
 
-  const { data, error: dbError } = await supabase
-    .from("gallery")
-    .insert({
-      title,
-      description,
-      category,
-      media_type: "video",
-      video_url: buildVideoUrl(signParams.cloudName, result.public_id),
-      poster_url: buildPosterUrl(signParams.cloudName, result.public_id),
-      duration_seconds: result.duration ?? null,
-      storage_path: result.public_id,
-      uploaded_by: userId,
-    })
-    .select(GALLERY_FIELDS)
-    .single();
+  try {
+    const { data, error: dbError } = await supabase
+      .from("gallery")
+      .insert({
+        title,
+        description,
+        category,
+        media_type: "video",
+        video_url: result.secure_url,
+        poster_url: buildPosterUrl(signParams.cloudName, result.public_id),
+        duration_seconds: result.duration ?? clientDuration ?? null,
+        storage_path: result.public_id,
+        uploaded_by: userId,
+      })
+      .select(GALLERY_FIELDS)
+      .single();
 
-  if (dbError) throw dbError;
-  return data;
+    if (dbError) throw dbError;
+    return data;
+  } catch (err) {
+    await fetch("/api/cloudinary-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assets: [{ publicId: result.public_id, resourceType: "video" }],
+      }),
+    }).catch(() => {});
+    throw err;
+  }
 }
 
 async function updateImageFn({ id, title, description, category }) {

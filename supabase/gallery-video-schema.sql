@@ -22,3 +22,15 @@ alter table public.gallery
 alter table public.gallery
   add constraint gallery_media_type_check
   check (media_type in ('image', 'video'));
+
+-- Video rows never populate image_url/full_image_url (they use video_url/poster_url
+-- instead), so these columns must be nullable or every video insert fails at the
+-- DB step after the asset is already uploaded to Cloudinary.
+alter table public.gallery alter column image_url drop not null;
+alter table public.gallery alter column full_image_url drop not null;
+
+-- Verification: after running the above, confirm both columns report
+-- is_nullable = 'YES' via:
+--   select column_name, is_nullable
+--   from information_schema.columns
+--   where table_name = 'gallery' and column_name in ('image_url', 'full_image_url');

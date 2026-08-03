@@ -10,6 +10,20 @@ export async function POST(request) {
     if (!user)
       return Response.json({ error: "Unauthorised." }, { status: 401 });
 
+    // This route is only ever called by the gallery hook's deleteImageFn
+    // (grepped for callers of /api/cloudinary-delete — no other feature in
+    // the app deletes Cloudinary assets), so the gallery-manage role gate
+    // applies unconditionally, unlike cloudinary-sign which has other,
+    // non-gallery callers.
+    const { data: admin } = await supabase
+      .from("admins")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!admin || !["super_user", "manager"].includes(admin.role))
+      return Response.json({ error: "Forbidden." }, { status: 403 });
+
     const { assets } = await request.json();
     if (!Array.isArray(assets) || assets.length === 0)
       return Response.json(

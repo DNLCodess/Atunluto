@@ -192,7 +192,10 @@ function UploadModal({
     e.preventDefault();
     if (mediaType === "video") {
       if (!videoFile || !form.title) return;
-      onUploadVideo({ file: videoFile, ...form, userId }, { onSuccess: onClose });
+      onUploadVideo(
+        { file: videoFile, ...form, userId, clientDuration: videoDuration },
+        { onSuccess: onClose },
+      );
     } else {
       if (!file || !form.title) return;
       onUpload({ file, thumbnailFile, ...form, userId }, { onSuccess: onClose });
@@ -353,6 +356,7 @@ function UploadModal({
                       <video
                         src={videoPreviewUrl}
                         controls
+                        playsInline
                         className="w-full h-56 rounded-xl bg-black"
                       />
                       <div className="text-sm font-poppins text-gray-600">
@@ -621,6 +625,7 @@ function ViewModal({ image, onClose }) {
               src={image.video_url}
               poster={image.poster_url}
               controls
+              playsInline
               className="w-full h-full object-contain"
             />
           ) : (
@@ -843,7 +848,7 @@ export default function AdminGalleryPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-500 font-poppins font-medium">
-            Total Images
+            Total Media
           </p>
           {isLoading ? (
             <div className="h-8 w-16 bg-gray-200 rounded animate-pulse mt-2" />
@@ -914,7 +919,7 @@ export default function AdminGalleryPage() {
           <span className="text-xs text-gray-400 font-poppins ml-2">
             {isLoading
               ? "—"
-              : `${filteredImages.length} image${filteredImages.length !== 1 ? "s" : ""}`}
+              : `${filteredImages.length} item${filteredImages.length !== 1 ? "s" : ""}`}
           </span>
         </div>
       </div>
@@ -936,12 +941,12 @@ export default function AdminGalleryPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
           <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2 font-montserrat">
-            No Images Found
+            No Media Found
           </h3>
           <p className="text-gray-500 font-poppins text-sm">
             {search || categoryFilter !== "all"
               ? "Try adjusting your filters."
-              : "Upload your first image to get started."}
+              : "Upload your first photo or video to get started."}
           </p>
         </div>
       ) : viewMode === "grid" ? (
@@ -954,13 +959,19 @@ export default function AdminGalleryPage() {
               className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group"
             >
               <div className="relative aspect-square overflow-hidden bg-gray-100">
-                <Image
-                  src={image.media_type === "video" ? (image.poster_url || image.image_url) : image.image_url}
-                  alt={image.title}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover group-hover:scale-110 transition-transform duration-300"
-                />
+                {image.media_type === "video" && !image.poster_url ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+                    <Video className="w-10 h-10 text-gray-400" />
+                  </div>
+                ) : (
+                  <Image
+                    src={image.media_type === "video" ? image.poster_url : image.image_url}
+                    alt={image.title}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-cover group-hover:scale-110 transition-transform duration-300"
+                  />
+                )}
                 {image.media_type === "video" && (
                   <div className="absolute top-3 left-3 z-10 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded-lg font-poppins">
                     <Play className="w-3 h-3 fill-white" />
@@ -1038,14 +1049,20 @@ export default function AdminGalleryPage() {
                   <tr key={image.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4">
                       <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                        <Image
-                          src={image.media_type === "video" ? (image.poster_url || image.image_url) : image.image_url}
-                          alt={image.title}
-                          fill
-                          sizes="56px"
-                          className="object-cover"
-                        />
-                        {image.media_type === "video" && (
+                        {image.media_type === "video" && !image.poster_url ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+                            <Video className="w-5 h-5 text-gray-400" />
+                          </div>
+                        ) : (
+                          <Image
+                            src={image.media_type === "video" ? image.poster_url : image.image_url}
+                            alt={image.title}
+                            fill
+                            sizes="56px"
+                            className="object-cover"
+                          />
+                        )}
+                        {image.media_type === "video" && image.poster_url && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                             <Play className="w-4 h-4 text-white fill-white" />
                           </div>
