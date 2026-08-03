@@ -955,7 +955,7 @@ export default function AdminGalleryPage() {
             >
               <div className="relative aspect-square overflow-hidden bg-gray-100">
                 <Image
-                  src={image.media_type === "video" ? image.poster_url : image.image_url}
+                  src={image.media_type === "video" ? (image.poster_url || image.image_url) : image.image_url}
                   alt={image.title}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
@@ -1039,7 +1039,7 @@ export default function AdminGalleryPage() {
                     <td className="px-6 py-4">
                       <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                         <Image
-                          src={image.media_type === "video" ? image.poster_url : image.image_url}
+                          src={image.media_type === "video" ? (image.poster_url || image.image_url) : image.image_url}
                           alt={image.title}
                           fill
                           sizes="56px"
