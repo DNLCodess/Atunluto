@@ -26,6 +26,7 @@ import {
   Calendar,
   Loader2,
   Video,
+  Play,
 } from "lucide-react";
 import { format as dateFmt } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -615,13 +616,22 @@ function ViewModal({ image, onClose }) {
         className="relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
       >
         <div className="relative h-[60vh] bg-gray-900">
-          <Image
-            src={image.full_image_url || image.image_url}
-            alt={image.title}
-            fill
-            className="object-contain"
-            sizes="(max-width: 896px) 100vw, 896px"
-          />
+          {image.media_type === "video" ? (
+            <video
+              src={image.video_url}
+              poster={image.poster_url}
+              controls
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <Image
+              src={image.full_image_url || image.image_url}
+              alt={image.title}
+              fill
+              className="object-contain"
+              sizes="(max-width: 896px) 100vw, 896px"
+            />
+          )}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition"
@@ -640,7 +650,11 @@ function ViewModal({ image, onClose }) {
               </span>
             </div>
             <a
-              href={image.full_image_url || image.image_url}
+              href={
+                image.media_type === "video"
+                  ? image.video_url
+                  : image.full_image_url || image.image_url
+              }
               download
               className="p-3 bg-green-100 hover:bg-green-200 text-green-700 rounded-xl transition"
               title="Download"
@@ -690,12 +704,14 @@ function DeleteModal({ image, isDeleting, deleteError, onConfirm, onCancel }) {
             <Trash2 className="w-10 h-10 text-red-600" />
           </div>
           <h3 className="text-2xl font-extrabold text-gray-900 font-montserrat">
-            Delete Image?
+            Delete {image.media_type === "video" ? "Video" : "Image"}?
           </h3>
           <p className="text-gray-600 mt-4 leading-relaxed font-poppins text-sm">
             Permanently delete{" "}
-            <span className="font-bold text-gray-900">{image.title}</span>? Both
-            the thumbnail and full-resolution files will be removed.
+            <span className="font-bold text-gray-900">{image.title}</span>?{" "}
+            {image.media_type === "video"
+              ? "The video file will be removed from storage."
+              : "Both the thumbnail and full-resolution files will be removed."}
           </p>
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
             <p className="text-sm text-red-800 font-semibold font-poppins">
@@ -939,12 +955,18 @@ export default function AdminGalleryPage() {
             >
               <div className="relative aspect-square overflow-hidden bg-gray-100">
                 <Image
-                  src={image.image_url}
+                  src={image.media_type === "video" ? image.poster_url : image.image_url}
                   alt={image.title}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                   className="object-cover group-hover:scale-110 transition-transform duration-300"
                 />
+                {image.media_type === "video" && (
+                  <div className="absolute top-3 left-3 z-10 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded-lg font-poppins">
+                    <Play className="w-3 h-3 fill-white" />
+                    {formatDuration(image.duration_seconds)}
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2">
                     <button
@@ -1017,12 +1039,17 @@ export default function AdminGalleryPage() {
                     <td className="px-6 py-4">
                       <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                         <Image
-                          src={image.image_url}
+                          src={image.media_type === "video" ? image.poster_url : image.image_url}
                           alt={image.title}
                           fill
                           sizes="56px"
                           className="object-cover"
                         />
+                        {image.media_type === "video" && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <Play className="w-4 h-4 text-white fill-white" />
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
