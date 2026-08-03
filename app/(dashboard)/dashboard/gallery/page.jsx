@@ -11,6 +11,7 @@ import {
   formatFileSize,
   compressionSaving,
 } from "@/utils/image-processing";
+import { validateVideoFile, formatDuration } from "@/utils/video-processing";
 import {
   Upload,
   Image as ImageIcon,
@@ -24,6 +25,8 @@ import {
   Download,
   Calendar,
   Loader2,
+  Video,
+  Play,
 } from "lucide-react";
 import { format as dateFmt } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -92,12 +95,24 @@ function GalleryCardSkeleton() {
 }
 
 // ─── Upload Modal ─────────────────────────────────────────────────────────────
-function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
+function UploadModal({
+  onClose,
+  onUpload,
+  isUploading,
+  uploadError,
+  onUploadVideo,
+  isUploadingVideo,
+  uploadVideoError,
+  userId,
+}) {
+  const [mediaType, setMediaType] = useState("image");
   const [form, setForm] = useState({
     title: "",
     description: "",
     category: "Events",
   });
+
+  // Photo state
   const [file, setFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -105,6 +120,15 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
   const [compressedSize, setCompressedSize] = useState(0);
   const [processingFile, setProcessingFile] = useState(false);
   const [fileError, setFileError] = useState(null);
+
+  // Video state
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [processingVideo, setProcessingVideo] = useState(false);
+  const [videoError, setVideoError] = useState(null);
+
+  const isSubmitting = isUploading || isUploadingVideo;
 
   const handleFileSelect = async (e) => {
     const selected = e.target.files[0];
@@ -143,13 +167,44 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
     }
   };
 
+  const handleVideoSelect = async (e) => {
+    const selected = e.target.files[0];
+    if (!selected) return;
+
+    setVideoError(null);
+    setProcessingVideo(true);
+
+    const result = await validateVideoFile(selected);
+
+    if (!result.valid) {
+      setVideoError(result.error);
+      setProcessingVideo(false);
+      return;
+    }
+
+    setVideoFile(selected);
+    setVideoDuration(result.duration);
+    setVideoPreviewUrl(URL.createObjectURL(selected));
+    setProcessingVideo(false);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!file || !form.title) return;
-    onUpload({ file, thumbnailFile, ...form, userId }, { onSuccess: onClose });
+    if (mediaType === "video") {
+      if (!videoFile || !form.title) return;
+      onUploadVideo(
+        { file: videoFile, ...form, userId, clientDuration: videoDuration },
+        { onSuccess: onClose },
+      );
+    } else {
+      if (!file || !form.title) return;
+      onUpload({ file, thumbnailFile, ...form, userId }, { onSuccess: onClose });
+    }
   };
 
   const saving = compressionSaving(originalSize, compressedSize);
+  const currentError =
+    mediaType === "video" ? uploadVideoError || videoError : uploadError || fileError;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -159,7 +214,7 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
         exit={{ opacity: 0 }}
         className="absolute inset-0 backdrop-blur-md"
         style={{ background: "rgba(17,24,39,0.6)" }}
-        onClick={() => !isUploading && onClose()}
+        onClick={() => !isSubmitting && onClose()}
       />
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -170,91 +225,169 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
         <div className="p-8">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-extrabold text-gray-900 font-montserrat">
-              Upload Image
+              Upload Media
             </h2>
             <button
-              onClick={() => !isUploading && onClose()}
-              disabled={isUploading}
+              onClick={() => !isSubmitting && onClose()}
+              disabled={isSubmitting}
               className="p-2 hover:bg-gray-100 rounded-full transition disabled:opacity-50"
             >
               <X className="w-6 h-6" />
             </button>
           </div>
 
+          {/* Photo / Video toggle */}
+          <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-xl mb-6 w-fit">
+            {[
+              { type: "image", label: "Photo", Icon: ImageIcon },
+              { type: "video", label: "Video", Icon: Video },
+            ].map(({ type, label, Icon }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setMediaType(type)}
+                disabled={isSubmitting}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-poppins transition disabled:opacity-50 ${
+                  mediaType === type
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+
           <AnimatePresence>
-            {(uploadError || fileError) && (
-              <ErrorBanner message={uploadError || fileError} />
-            )}
+            {currentError && <ErrorBanner message={currentError} />}
           </AnimatePresence>
 
           <form onSubmit={handleSubmit} className="space-y-6 mt-4">
-            {/* Drop zone */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2 font-poppins">
-                Select Image *
-              </label>
-              <div
-                className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition ${
-                  previewUrl
-                    ? "border-green-500 bg-green-50"
-                    : "border-gray-300 hover:border-green-500 hover:bg-gray-50"
-                } ${isUploading || processingFile ? "pointer-events-none opacity-50" : ""}`}
-                onClick={() =>
-                  document.getElementById("galleryFileInput").click()
-                }
-              >
-                {processingFile ? (
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
-                    <p className="text-sm text-gray-500 font-poppins">
-                      Optimising image...
-                    </p>
-                  </div>
-                ) : previewUrl ? (
-                  <div className="space-y-3">
-                    <div className="relative w-full h-56 rounded-xl overflow-hidden">
-                      <Image
-                        src={previewUrl}
-                        alt="Preview"
-                        fill
-                        className="object-contain"
-                      />
+            {mediaType === "image" ? (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2 font-poppins">
+                  Select Image *
+                </label>
+                <div
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition ${
+                    previewUrl
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-300 hover:border-green-500 hover:bg-gray-50"
+                  } ${isSubmitting || processingFile ? "pointer-events-none opacity-50" : ""}`}
+                  onClick={() =>
+                    document.getElementById("galleryFileInput").click()
+                  }
+                >
+                  {processingFile ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
+                      <p className="text-sm text-gray-500 font-poppins">
+                        Optimising image...
+                      </p>
                     </div>
-                    {saving !== null && (
-                      <div className="text-sm font-poppins text-gray-600">
-                        <span>
-                          {formatFileSize(originalSize)} →{" "}
-                          {formatFileSize(compressedSize)}{" "}
-                        </span>
-                        <span className="text-green-600 font-semibold">
-                          ({saving}% smaller)
-                        </span>
+                  ) : previewUrl ? (
+                    <div className="space-y-3">
+                      <div className="relative w-full h-56 rounded-xl overflow-hidden">
+                        <Image
+                          src={previewUrl}
+                          alt="Preview"
+                          fill
+                          className="object-contain"
+                        />
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium font-poppins">
-                      Click to select an image
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1 font-poppins">
-                      PNG, JPG, WEBP up to 10MB (auto-optimised)
-                    </p>
-                  </>
-                )}
+                      {saving !== null && (
+                        <div className="text-sm font-poppins text-gray-600">
+                          <span>
+                            {formatFileSize(originalSize)} →{" "}
+                            {formatFileSize(compressedSize)}{" "}
+                          </span>
+                          <span className="text-green-600 font-semibold">
+                            ({saving}% smaller)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 font-medium font-poppins">
+                        Click to select an image
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1 font-poppins">
+                        PNG, JPG, WEBP up to 10MB (auto-optimised)
+                      </p>
+                    </>
+                  )}
+                </div>
+                <input
+                  id="galleryFileInput"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  disabled={isSubmitting}
+                  className="hidden"
+                />
               </div>
-              <input
-                id="galleryFileInput"
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                disabled={isUploading}
-                className="hidden"
-              />
-            </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2 font-poppins">
+                  Select Video *
+                </label>
+                <div
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition ${
+                    videoPreviewUrl
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-300 hover:border-green-500 hover:bg-gray-50"
+                  } ${isSubmitting || processingVideo ? "pointer-events-none opacity-50" : ""}`}
+                  onClick={() =>
+                    document.getElementById("galleryVideoInput").click()
+                  }
+                >
+                  {processingVideo ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
+                      <p className="text-sm text-gray-500 font-poppins">
+                        Checking video...
+                      </p>
+                    </div>
+                  ) : videoPreviewUrl ? (
+                    <div className="space-y-3">
+                      <video
+                        src={videoPreviewUrl}
+                        controls
+                        playsInline
+                        className="w-full h-56 rounded-xl bg-black"
+                      />
+                      <div className="text-sm font-poppins text-gray-600">
+                        <span>{formatFileSize(videoFile.size)}</span>
+                        <span className="mx-2">•</span>
+                        <span>{formatDuration(videoDuration)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <Video className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-600 font-medium font-poppins">
+                        Click to select a video
+                      </p>
+                      <p className="text-sm text-gray-500 mt-1 font-poppins">
+                        MP4, MOV, WEBM up to 100MB, 3 minutes max
+                      </p>
+                    </>
+                  )}
+                </div>
+                <input
+                  id="galleryVideoInput"
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoSelect}
+                  disabled={isSubmitting}
+                  className="hidden"
+                />
+              </div>
+            )}
 
-            {/* Title */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2 font-poppins">
                 Title *
@@ -266,13 +399,12 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
                   setForm((f) => ({ ...f, title: e.target.value }))
                 }
                 required
-                disabled={isUploading}
+                disabled={isSubmitting}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 outline-none disabled:opacity-50 font-poppins text-sm"
-                placeholder="Enter image title"
+                placeholder="Enter a title"
               />
             </div>
 
-            {/* Description */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2 font-poppins">
                 Description
@@ -283,13 +415,12 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
                 rows={3}
-                disabled={isUploading}
+                disabled={isSubmitting}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 outline-none resize-none disabled:opacity-50 font-poppins text-sm"
                 placeholder="Optional description"
               />
             </div>
 
-            {/* Category */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2 font-poppins">
                 Category
@@ -299,7 +430,7 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
                 onChange={(e) =>
                   setForm((f) => ({ ...f, category: e.target.value }))
                 }
-                disabled={isUploading}
+                disabled={isSubmitting}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 outline-none disabled:opacity-50 font-poppins text-sm"
               >
                 {CATEGORIES.map((c) => (
@@ -310,29 +441,33 @@ function UploadModal({ onClose, onUpload, isUploading, uploadError, userId }) {
               </select>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-4 pt-2">
               <button
                 type="button"
                 onClick={onClose}
-                disabled={isUploading}
+                disabled={isSubmitting}
                 className="flex-1 py-3 border-2 border-gray-300 rounded-xl hover:bg-gray-50 font-semibold font-poppins transition disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={isUploading || !file || !form.title}
+                disabled={
+                  isSubmitting ||
+                  (mediaType === "video" ? !videoFile : !file) ||
+                  !form.title
+                }
                 className="flex-1 py-3 text-white rounded-xl font-semibold font-poppins shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 style={{ backgroundColor: "#1B5E20" }}
               >
-                {isUploading ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" /> Uploading...
                   </>
                 ) : (
                   <>
-                    <Upload className="w-5 h-5" /> Upload Image
+                    <Upload className="w-5 h-5" /> Upload{" "}
+                    {mediaType === "video" ? "Video" : "Image"}
                   </>
                 )}
               </button>
@@ -485,13 +620,23 @@ function ViewModal({ image, onClose }) {
         className="relative bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
       >
         <div className="relative h-[60vh] bg-gray-900">
-          <Image
-            src={image.full_image_url || image.image_url}
-            alt={image.title}
-            fill
-            className="object-contain"
-            sizes="(max-width: 896px) 100vw, 896px"
-          />
+          {image.media_type === "video" ? (
+            <video
+              src={image.video_url}
+              poster={image.poster_url}
+              controls
+              playsInline
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <Image
+              src={image.full_image_url || image.image_url}
+              alt={image.title}
+              fill
+              className="object-contain"
+              sizes="(max-width: 896px) 100vw, 896px"
+            />
+          )}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition"
@@ -510,7 +655,11 @@ function ViewModal({ image, onClose }) {
               </span>
             </div>
             <a
-              href={image.full_image_url || image.image_url}
+              href={
+                image.media_type === "video"
+                  ? image.video_url
+                  : image.full_image_url || image.image_url
+              }
               download
               className="p-3 bg-green-100 hover:bg-green-200 text-green-700 rounded-xl transition"
               title="Download"
@@ -560,12 +709,14 @@ function DeleteModal({ image, isDeleting, deleteError, onConfirm, onCancel }) {
             <Trash2 className="w-10 h-10 text-red-600" />
           </div>
           <h3 className="text-2xl font-extrabold text-gray-900 font-montserrat">
-            Delete Image?
+            Delete {image.media_type === "video" ? "Video" : "Image"}?
           </h3>
           <p className="text-gray-600 mt-4 leading-relaxed font-poppins text-sm">
             Permanently delete{" "}
-            <span className="font-bold text-gray-900">{image.title}</span>? Both
-            the thumbnail and full-resolution files will be removed.
+            <span className="font-bold text-gray-900">{image.title}</span>?{" "}
+            {image.media_type === "video"
+              ? "The video file will be removed from storage."
+              : "Both the thumbnail and full-resolution files will be removed."}
           </p>
           <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
             <p className="text-sm text-red-800 font-semibold font-poppins">
@@ -611,6 +762,9 @@ export default function AdminGalleryPage() {
     uploadImage,
     isUploading,
     uploadError,
+    uploadVideo,
+    isUploadingVideo,
+    uploadVideoError,
     updateImage,
     isUpdating,
     updateError,
@@ -678,7 +832,7 @@ export default function AdminGalleryPage() {
             style={{ backgroundColor: "#1B5E20" }}
           >
             <Upload className="w-5 h-5" />
-            Upload Image
+            Upload Media
           </motion.button>
         )}
       </div>
@@ -694,7 +848,7 @@ export default function AdminGalleryPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <p className="text-sm text-gray-500 font-poppins font-medium">
-            Total Images
+            Total Media
           </p>
           {isLoading ? (
             <div className="h-8 w-16 bg-gray-200 rounded animate-pulse mt-2" />
@@ -765,7 +919,7 @@ export default function AdminGalleryPage() {
           <span className="text-xs text-gray-400 font-poppins ml-2">
             {isLoading
               ? "—"
-              : `${filteredImages.length} image${filteredImages.length !== 1 ? "s" : ""}`}
+              : `${filteredImages.length} item${filteredImages.length !== 1 ? "s" : ""}`}
           </span>
         </div>
       </div>
@@ -787,12 +941,12 @@ export default function AdminGalleryPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
           <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2 font-montserrat">
-            No Images Found
+            No Media Found
           </h3>
           <p className="text-gray-500 font-poppins text-sm">
             {search || categoryFilter !== "all"
               ? "Try adjusting your filters."
-              : "Upload your first image to get started."}
+              : "Upload your first photo or video to get started."}
           </p>
         </div>
       ) : viewMode === "grid" ? (
@@ -805,13 +959,25 @@ export default function AdminGalleryPage() {
               className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all overflow-hidden group"
             >
               <div className="relative aspect-square overflow-hidden bg-gray-100">
-                <Image
-                  src={image.image_url}
-                  alt={image.title}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover group-hover:scale-110 transition-transform duration-300"
-                />
+                {image.media_type === "video" && !image.poster_url ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+                    <Video className="w-10 h-10 text-gray-400" />
+                  </div>
+                ) : (
+                  <Image
+                    src={image.media_type === "video" ? image.poster_url : image.image_url}
+                    alt={image.title}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-cover group-hover:scale-110 transition-transform duration-300"
+                  />
+                )}
+                {image.media_type === "video" && (
+                  <div className="absolute top-3 left-3 z-10 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs font-medium rounded-lg font-poppins">
+                    <Play className="w-3 h-3 fill-white" />
+                    {formatDuration(image.duration_seconds)}
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                   <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2">
                     <button
@@ -883,13 +1049,24 @@ export default function AdminGalleryPage() {
                   <tr key={image.id} className="hover:bg-gray-50 transition">
                     <td className="px-6 py-4">
                       <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                        <Image
-                          src={image.image_url}
-                          alt={image.title}
-                          fill
-                          sizes="56px"
-                          className="object-cover"
-                        />
+                        {image.media_type === "video" && !image.poster_url ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+                            <Video className="w-5 h-5 text-gray-400" />
+                          </div>
+                        ) : (
+                          <Image
+                            src={image.media_type === "video" ? image.poster_url : image.image_url}
+                            alt={image.title}
+                            fill
+                            sizes="56px"
+                            className="object-cover"
+                          />
+                        )}
+                        {image.media_type === "video" && image.poster_url && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <Play className="w-4 h-4 text-white fill-white" />
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -952,6 +1129,9 @@ export default function AdminGalleryPage() {
             onUpload={uploadImage}
             isUploading={isUploading}
             uploadError={uploadError}
+            onUploadVideo={uploadVideo}
+            isUploadingVideo={isUploadingVideo}
+            uploadVideoError={uploadVideoError}
             userId={user?.id}
           />
         )}

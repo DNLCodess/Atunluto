@@ -5,7 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { motion, useAnimation } from "framer-motion";
 import ImageCard from "./ImageCard";
 
-export default function InfiniteRow({ images, rowIndex, onImageClick }) {
+export default function InfiniteRow({
+  images,
+  rowIndex,
+  onImageClick,
+  CardComponent = ImageCard,
+}) {
   const [isPaused, setIsPaused] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
@@ -77,7 +82,7 @@ export default function InfiniteRow({ images, rowIndex, onImageClick }) {
         }}
       >
         {displayImages.map((image, index) => (
-          <ImageCard
+          <CardComponent
             key={`${image.id}-${index}`}
             image={image}
             onClick={() => onImageClick(image)}
