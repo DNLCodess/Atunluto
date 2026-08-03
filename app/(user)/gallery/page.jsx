@@ -4,9 +4,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/supabase/client";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { Search, Grid3x3 } from "lucide-react";
+import { Search, Grid3x3, Video as VideoIcon } from "lucide-react";
 import FullscreenViewer from "@/components/shared/gallery/FullScreenViewer";
+import FullScreenVideoViewer from "@/components/shared/gallery/FullScreenVideoViewer";
 import InfiniteRow from "@/components/shared/gallery/InfiniteRow";
+import VideoCard from "@/components/shared/gallery/VideoCard";
 
 export default function GalleryPage() {
   const supabase = createClient();
@@ -15,12 +17,12 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState("photos");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const shouldReduceMotion = useReducedMotion();
 
-  // Fetch gallery images
   const fetchGallery = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -38,9 +40,27 @@ export default function GalleryPage() {
     fetchGallery();
   }, [fetchGallery]);
 
-  // Filter images based on category and search
-  const filteredImages = useMemo(() => {
-    return images.filter((img) => {
+  // Split by media type. Rows created before this feature (or with a null
+  // media_type) default to 'image' at the database level, so they land here.
+  const photos = useMemo(
+    () => images.filter((img) => img.media_type !== "video"),
+    [images],
+  );
+  const videos = useMemo(
+    () => images.filter((img) => img.media_type === "video"),
+    [images],
+  );
+
+  const activeItems = activeTab === "videos" ? videos : photos;
+
+  // A category that only exists on photos (or vice versa) shouldn't
+  // silently hide every item after switching tabs.
+  useEffect(() => {
+    setCategoryFilter("all");
+  }, [activeTab]);
+
+  const filteredItems = useMemo(() => {
+    return activeItems.filter((img) => {
       const matchesCategory =
         categoryFilter === "all" || img.category === categoryFilter;
       const matchesSearch =
@@ -49,43 +69,38 @@ export default function GalleryPage() {
         img.description?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [images, categoryFilter, searchQuery]);
+  }, [activeItems, categoryFilter, searchQuery]);
 
-  // Get unique categories
   const categories = useMemo(() => {
-    const cats = new Set(images.map((img) => img.category));
+    const cats = new Set(activeItems.map((img) => img.category));
     return ["all", ...Array.from(cats)];
-  }, [images]);
+  }, [activeItems]);
 
-  // Split images into rows with exactly 6 images per row (no duplication)
-  const imageRows = useMemo(() => {
-    if (filteredImages.length === 0) return [];
+  // Split items into rows of 6 for the infinite-scroll rows (no duplication)
+  const itemRows = useMemo(() => {
+    if (filteredItems.length === 0) return [];
 
     const rows = [];
-    const imagesPerRow = 6;
+    const itemsPerRow = 6;
 
-    // Split images into chunks of 6
-    for (let i = 0; i < filteredImages.length; i += imagesPerRow) {
-      const row = filteredImages.slice(i, i + imagesPerRow);
-
-      // Only add rows that have at least 1 image
+    for (let i = 0; i < filteredItems.length; i += itemsPerRow) {
+      const row = filteredItems.slice(i, i + itemsPerRow);
       if (row.length > 0) {
         rows.push(row);
       }
     }
 
     return rows;
-  }, [filteredImages]);
+  }, [filteredItems]);
 
-  // Handle image click for fullscreen
   const openFullscreen = useCallback(
-    (image) => {
-      const index = filteredImages.findIndex((img) => img.id === image.id);
-      setSelectedImage(image);
+    (item) => {
+      const index = filteredItems.findIndex((img) => img.id === item.id);
+      setSelectedImage(item);
       setSelectedIndex(index);
       document.body.style.overflow = "hidden";
     },
-    [filteredImages]
+    [filteredItems],
   );
 
   const closeFullscreen = useCallback(() => {
@@ -97,12 +112,12 @@ export default function GalleryPage() {
     (direction) => {
       const newIndex =
         direction === "next"
-          ? (selectedIndex + 1) % filteredImages.length
-          : (selectedIndex - 1 + filteredImages.length) % filteredImages.length;
+          ? (selectedIndex + 1) % filteredItems.length
+          : (selectedIndex - 1 + filteredItems.length) % filteredItems.length;
       setSelectedIndex(newIndex);
-      setSelectedImage(filteredImages[newIndex]);
+      setSelectedImage(filteredItems[newIndex]);
     },
-    [selectedIndex, filteredImages]
+    [selectedIndex, filteredItems],
   );
 
   if (loading) {
@@ -124,7 +139,6 @@ export default function GalleryPage() {
     <div className="min-h-screen bg-linear-to-b from-gray-50 to-white">
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-linear-to-br from-green-900 via-green-800 to-green-900 text-white">
-        {/* Animated background pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-0 -left-4 w-72 h-72 bg-white rounded-full mix-blend-overlay filter blur-3xl animate-blob"></div>
           <div className="absolute top-0 -right-4 w-72 h-72 bg-white rounded-full mix-blend-overlay filter blur-3xl animate-blob animation-delay-2000"></div>
@@ -145,7 +159,7 @@ export default function GalleryPage() {
               className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full mb-6"
             >
               <Grid3x3 className="w-4 h-4" />
-              <span className="text-sm font-medium">Photo Gallery</span>
+              <span className="text-sm font-medium">Photo & Video Gallery</span>
             </motion.div>
 
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
@@ -167,11 +181,11 @@ export default function GalleryPage() {
             >
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse-subtle"></div>
-                <span>{images.length} Photos</span>
+                <span>{photos.length} Photos</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse-subtle"></div>
-                <span>{categories.length - 1} Categories</span>
+                <span>{videos.length} Videos</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse-subtle"></div>
@@ -181,7 +195,6 @@ export default function GalleryPage() {
           </motion.div>
         </div>
 
-        {/* Decorative bottom wave */}
         <div className="absolute bottom-0 left-0 right-0">
           <svg
             viewBox="0 0 1440 120"
@@ -199,7 +212,29 @@ export default function GalleryPage() {
 
       {/* Filters Section */}
       <section className="sticky top-0 z-30 bg-white/80 backdrop-blur-custom border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+          {/* Media type tabs */}
+          <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-xl w-fit">
+            {[
+              { tab: "photos", label: "Photos", Icon: Grid3x3 },
+              { tab: "videos", label: "Videos", Icon: VideoIcon },
+            ].map(({ tab, label, Icon }) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-smooth touch-target ${
+                  activeTab === tab
+                    ? "bg-green-700 text-white shadow-lg shadow-green-700/30"
+                    : "text-gray-600 hover:bg-gray-200"
+                }`}
+                aria-pressed={activeTab === tab}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
             {/* Search */}
             <div className="relative w-full sm:w-96">
@@ -208,9 +243,9 @@ export default function GalleryPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search photos..."
+                placeholder={`Search ${activeTab}...`}
                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-smooth text-sm"
-                aria-label="Search photos"
+                aria-label={`Search ${activeTab}`}
               />
             </div>
 
@@ -240,15 +275,19 @@ export default function GalleryPage() {
 
       {/* Infinite Scrolling Gallery */}
       <section className="py-12 sm:py-16 overflow-hidden no-overscroll md:pl-10">
-        {filteredImages.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center py-20 max-w-7xl mx-auto px-4"
           >
-            <Grid3x3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            {activeTab === "videos" ? (
+              <VideoIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            ) : (
+              <Grid3x3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            )}
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              No photos found
+              No {activeTab} found
             </h3>
             <p className="text-gray-600">
               Try adjusting your filters or search terms
@@ -256,24 +295,34 @@ export default function GalleryPage() {
           </motion.div>
         ) : (
           <div className="space-y-8">
-            {imageRows.map((row, index) => (
+            {itemRows.map((row, index) => (
               <InfiniteRow
-                key={index}
+                key={`${activeTab}-${index}`}
                 images={row}
                 rowIndex={index}
                 onImageClick={openFullscreen}
+                CardComponent={activeTab === "videos" ? VideoCard : undefined}
               />
             ))}
           </div>
         )}
       </section>
 
-      {/* Fullscreen Viewer */}
+      {/* Fullscreen Viewers */}
       <AnimatePresence>
-        {selectedImage && (
+        {selectedImage && selectedImage.media_type === "video" && (
+          <FullScreenVideoViewer
+            image={selectedImage}
+            images={filteredItems}
+            currentIndex={selectedIndex}
+            onClose={closeFullscreen}
+            onNavigate={navigateImage}
+          />
+        )}
+        {selectedImage && selectedImage.media_type !== "video" && (
           <FullscreenViewer
             image={selectedImage}
-            images={filteredImages}
+            images={filteredItems}
             currentIndex={selectedIndex}
             onClose={closeFullscreen}
             onNavigate={navigateImage}
