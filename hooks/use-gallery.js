@@ -86,17 +86,27 @@ async function updateImageFn({ id, title, description, category }) {
 }
 
 async function deleteImageFn(image) {
-  const publicIds = [image.storage_path, image.full_storage_path].filter(Boolean);
+  const isVideo = image.media_type === "video";
+  const assets = [
+    image.storage_path && {
+      publicId: image.storage_path,
+      resourceType: isVideo ? "video" : "image",
+    },
+    image.full_storage_path && {
+      publicId: image.full_storage_path,
+      resourceType: "image",
+    },
+  ].filter(Boolean);
 
-  if (publicIds.length > 0) {
+  if (assets.length > 0) {
     const res = await fetch("/api/cloudinary-delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publicIds }),
+      body: JSON.stringify({ assets }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || "Failed to delete images from storage.");
+      throw new Error(err.error || "Failed to delete media from storage.");
     }
   }
 

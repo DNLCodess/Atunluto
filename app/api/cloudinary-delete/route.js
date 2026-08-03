@@ -10,16 +10,23 @@ export async function POST(request) {
     if (!user)
       return Response.json({ error: "Unauthorised." }, { status: 401 });
 
-    const { publicIds } = await request.json();
-    if (!Array.isArray(publicIds) || publicIds.length === 0)
-      return Response.json({ error: "publicIds array is required." }, { status: 400 });
+    const { assets } = await request.json();
+    if (!Array.isArray(assets) || assets.length === 0)
+      return Response.json(
+        { error: "assets array is required." },
+        { status: 400 },
+      );
 
     const results = await Promise.allSettled(
-      publicIds.map((id) => cloudinary.uploader.destroy(id)),
+      assets.map(({ publicId, resourceType }) =>
+        cloudinary.uploader.destroy(publicId, {
+          resource_type: resourceType || "image",
+        }),
+      ),
     );
 
     const failed = results
-      .map((r, i) => (r.status === "rejected" ? publicIds[i] : null))
+      .map((r, i) => (r.status === "rejected" ? assets[i].publicId : null))
       .filter(Boolean);
 
     if (failed.length > 0) {
@@ -29,6 +36,9 @@ export async function POST(request) {
     return Response.json({ success: true });
   } catch (err) {
     console.error("Cloudinary delete error:", err);
-    return Response.json({ error: "Internal server error." }, { status: 500 });
+    return Response.json(
+      { error: "Internal server error." },
+      { status: 500 },
+    );
   }
 }
