@@ -1,6 +1,7 @@
 // lib/hooks/useGallery.js
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/supabase/client";
+import { buildPosterUrl, buildVideoUrl } from "@/utils/video-processing";
 
 const supabase = createClient();
 
@@ -19,6 +20,21 @@ async function cloudinaryUpload(file, { signature, timestamp, folder, cloudName,
   return res.json();
 }
 
+async function cloudinaryVideoUpload(file, { signature, timestamp, folder, cloudName, apiKey }) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("api_key", apiKey);
+  fd.append("timestamp", String(timestamp));
+  fd.append("signature", signature);
+  fd.append("folder", folder);
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`,
+    { method: "POST", body: fd },
+  );
+  if (!res.ok) throw new Error("Video upload failed.");
+  return res.json();
+}
+
 export const GALLERY_QUERY_KEY = ["gallery"];
 
 const GALLERY_FIELDS = [
@@ -26,8 +42,12 @@ const GALLERY_FIELDS = [
   "title",
   "description",
   "category",
+  "media_type",
   "image_url",
   "full_image_url",
+  "video_url",
+  "poster_url",
+  "duration_seconds",
   "storage_path",
   "full_storage_path",
   "uploaded_by",
@@ -64,6 +84,33 @@ async function uploadImageFn({ file, thumbnailFile, title, description, category
       full_image_url: fullResult.secure_url,
       storage_path: thumbResult.public_id,
       full_storage_path: fullResult.public_id,
+      uploaded_by: userId,
+    })
+    .select(GALLERY_FIELDS)
+    .single();
+
+  if (dbError) throw dbError;
+  return data;
+}
+
+async function uploadVideoFn({ file, title, description, category, userId }) {
+  const signRes = await fetch("/api/cloudinary-sign?folder=gallery/videos");
+  if (!signRes.ok) throw new Error("Failed to get upload credentials.");
+  const signParams = await signRes.json();
+
+  const result = await cloudinaryVideoUpload(file, signParams);
+
+  const { data, error: dbError } = await supabase
+    .from("gallery")
+    .insert({
+      title,
+      description,
+      category,
+      media_type: "video",
+      video_url: buildVideoUrl(signParams.cloudName, result.public_id),
+      poster_url: buildPosterUrl(signParams.cloudName, result.public_id),
+      duration_seconds: result.duration ?? null,
+      storage_path: result.public_id,
       uploaded_by: userId,
     })
     .select(GALLERY_FIELDS)
@@ -135,6 +182,13 @@ export function useGallery() {
     },
   });
 
+  const uploadVideoMutation = useMutation({
+    mutationFn: uploadVideoFn,
+    onSuccess: (newVideo) => {
+      queryClient.setQueryData(GALLERY_QUERY_KEY, (old = []) => [newVideo, ...old]);
+    },
+  });
+
   const updateMutation = useMutation({
     mutationFn: updateImageFn,
     onMutate: async (vars) => {
@@ -179,6 +233,10 @@ export function useGallery() {
     isUploading: uploadMutation.isPending,
     uploadError: uploadMutation.error?.message ?? null,
     uploadReset: uploadMutation.reset,
+
+    uploadVideo: uploadVideoMutation.mutate,
+    isUploadingVideo: uploadVideoMutation.isPending,
+    uploadVideoError: uploadVideoMutation.error?.message ?? null,
 
     updateImage: updateMutation.mutate,
     isUpdating: updateMutation.isPending,
