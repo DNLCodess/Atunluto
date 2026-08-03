@@ -49,3 +49,5 @@ sql.md
 .claude/scheduled_tasks.lock
 scripts/purge-supabase-storage.mjs
 supabase/cms-schema.sql
+.claude/
+app/dev-tools/
