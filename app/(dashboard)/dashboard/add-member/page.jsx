@@ -253,7 +253,9 @@ export default function AddMemberPage() {
     lga: "",
     ward: "",
     polling_unit: "",
+    polling_unit_code: "",
   });
+  const [pollingUnitId, setPollingUnitId] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -295,13 +297,30 @@ export default function AddMemberPage() {
       if (field === "lga") {
         next.ward = "";
         next.polling_unit = "";
+        next.polling_unit_code = "";
       }
       if (field === "ward") {
         next.polling_unit = "";
+        next.polling_unit_code = "";
       }
       return next;
     });
+    if (field === "lga" || field === "ward") setPollingUnitId("");
     if (errors[field]) setErrors((e) => ({ ...e, [field]: "" }));
+  }
+
+  // Polling units can share the same name within a ward (distinct pu_code),
+  // so the <select> is keyed by the DB row id; picking one resolves the
+  // actual name + code to store on the member record.
+  function handlePollingUnitChange(id) {
+    const pu = pollingUnitsData.find((p) => String(p.id) === id);
+    setPollingUnitId(id);
+    setForm((f) => ({
+      ...f,
+      polling_unit: pu?.pu_name ?? "",
+      polling_unit_code: pu?.pu_code ?? "",
+    }));
+    if (errors.polling_unit) setErrors((e) => ({ ...e, polling_unit: "" }));
   }
 
   // Prefetch all PUs for current LGA the moment the Ward dropdown is focused
@@ -323,7 +342,7 @@ export default function AddMemberPage() {
     if (!form.whatsapp.trim()) e.whatsapp = "WhatsApp number is required";
     if (!form.lga) e.lga = "LGA is required";
     if (!form.ward) e.ward = "Ward is required";
-    if (!form.polling_unit) e.polling_unit = "Polling unit is required";
+    if (!pollingUnitId) e.polling_unit = "Polling unit is required";
     return e;
   }
 
@@ -429,7 +448,9 @@ export default function AddMemberPage() {
                   lga: actor?.role !== "state_admin" ? actor?.lga || "" : "",
                   ward: "",
                   polling_unit: "",
+                  polling_unit_code: "",
                 });
+                setPollingUnitId("");
                 setProfileImageUrl(null);
               }}
               className="flex-1 px-4 py-2.5 rounded-xl border border-border-gray text-sm font-medium text-text-gray hover:bg-off-white transition-colors"
@@ -658,8 +679,8 @@ export default function AddMemberPage() {
               <Field label="Polling Unit" required error={errors.polling_unit}>
                 <div className="relative">
                   <SelectEl
-                    value={form.polling_unit}
-                    onChange={(e) => set("polling_unit", e.target.value)}
+                    value={pollingUnitId}
+                    onChange={(e) => handlePollingUnitChange(e.target.value)}
                     disabled={!form.ward || puLoading}
                     error={errors.polling_unit}
                   >
@@ -675,7 +696,7 @@ export default function AddMemberPage() {
                               : "Select polling unit"}
                     </option>
                     {pollingUnitsData.map((pu) => (
-                      <option key={pu.id} value={pu.pu_name}>
+                      <option key={pu.id} value={String(pu.id)}>
                         {pu.pu_code} — {pu.pu_name}
                       </option>
                     ))}

@@ -89,7 +89,9 @@ export default function MemberRegistrationForm({
     messenger: "",
     lga: "",
     ward: "",
+    pollingUnitId: "",
     pollingUnit: "",
+    pollingUnitCode: "",
     dateOfBirth: "",
     gender: "",
   });
@@ -127,7 +129,14 @@ export default function MemberRegistrationForm({
   }
 
   function handleLGAChange(lga) {
-    setForm((prev) => ({ ...prev, lga, ward: "", pollingUnit: "" }));
+    setForm((prev) => ({
+      ...prev,
+      lga,
+      ward: "",
+      pollingUnitId: "",
+      pollingUnit: "",
+      pollingUnitCode: "",
+    }));
     setErrors((prev) => ({ ...prev, lga: "", ward: "", pollingUnit: "" }));
 
     // Prefetch PUs for every ward in this LGA immediately on LGA selection.
@@ -138,8 +147,28 @@ export default function MemberRegistrationForm({
     );
   }
   function handleWardChange(ward) {
-    setForm((prev) => ({ ...prev, ward, pollingUnit: "" }));
+    setForm((prev) => ({
+      ...prev,
+      ward,
+      pollingUnitId: "",
+      pollingUnit: "",
+      pollingUnitCode: "",
+    }));
     setErrors((prev) => ({ ...prev, ward: "", pollingUnit: "" }));
+  }
+
+  // Polling units can share the same name within a ward (distinct pu_code),
+  // so the <select> is keyed by the DB row id; picking one resolves the
+  // actual name + code to store on the member record.
+  function handlePollingUnitChange(id) {
+    const pu = pollingUnitsData.find((p) => String(p.id) === id);
+    setForm((prev) => ({
+      ...prev,
+      pollingUnitId: id,
+      pollingUnit: pu?.pu_name ?? "",
+      pollingUnitCode: pu?.pu_code ?? "",
+    }));
+    setErrors((prev) => ({ ...prev, pollingUnit: "" }));
   }
 
   /**
@@ -222,7 +251,8 @@ export default function MemberRegistrationForm({
     if (!form.whatsapp.trim()) e.whatsapp = "WhatsApp number is required";
     if (!form.lga) e.lga = "Please select your LGA";
     if (!form.ward) e.ward = "Please select your ward";
-    if (!form.pollingUnit) e.pollingUnit = "Please select your polling unit";
+    if (!form.pollingUnitId)
+      e.pollingUnit = "Please select your polling unit";
     if (!form.gender) e.gender = "Please select your gender";
     if (!form.dateOfBirth) {
       e.dateOfBirth = "Date of birth is required";
@@ -262,6 +292,7 @@ export default function MemberRegistrationForm({
           lga: form.lga,
           ward: form.ward,
           polling_unit: form.pollingUnit,
+          polling_unit_code: form.pollingUnitCode,
           date_of_birth: form.dateOfBirth,
           gender: form.gender,
           profile_image_url: uploadedImageUrl,
@@ -298,7 +329,9 @@ export default function MemberRegistrationForm({
       messenger: "",
       lga: "",
       ward: "",
+      pollingUnitId: "",
       pollingUnit: "",
+      pollingUnitCode: "",
       dateOfBirth: "",
       gender: "",
     });
@@ -596,10 +629,10 @@ export default function MemberRegistrationForm({
         <FieldWrapper label="Polling Unit" required error={errors.pollingUnit}>
           <div className="relative">
             <select
-              value={form.pollingUnit}
-              onChange={(e) => set("pollingUnit", e.target.value)}
+              value={form.pollingUnitId}
+              onChange={(e) => handlePollingUnitChange(e.target.value)}
               disabled={!form.ward || puLoading}
-              className={`${inputCls("pollingUnit")} ${!form.pollingUnit ? "text-text-light" : ""} disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`${inputCls("pollingUnit")} ${!form.pollingUnitId ? "text-text-light" : ""} disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <option value="">
                 {puLoading
@@ -613,7 +646,7 @@ export default function MemberRegistrationForm({
                         : "— Select polling unit —"}
               </option>
               {pollingUnitsData.map((pu) => (
-                <option key={pu.id} value={pu.pu_name}>
+                <option key={pu.id} value={String(pu.id)}>
                   {pu.pu_code} — {pu.pu_name}
                 </option>
               ))}

@@ -55,6 +55,7 @@ export async function POST(request) {
       lga,
       ward,
       polling_unit,
+      polling_unit_code,
       profile_image_url,
     } = body;
 
@@ -99,13 +100,16 @@ export async function POST(request) {
     }
 
     // ── Validate LGA + ward + polling unit against oyo_south_polling_units ───
-    // Single query on the composite index (lga, ward_name) + pu_name filter.
+    // Some polling units share the same pu_name within a ward, so the client
+    // sends pu_code too (pu_code is unique within a ward) — prefer that for
+    // an unambiguous lookup, falling back to pu_name for older cached clients.
     const { data: puRow, error: puLookupError } = await serviceClient
       .from("oyo_south_polling_units")
-      .select("id")
+      .select("id, pu_code, pu_name")
       .eq("lga", lga)
       .eq("ward_name", ward)
-      .eq("pu_name", polling_unit)
+      .eq(polling_unit_code ? "pu_code" : "pu_name", polling_unit_code || polling_unit)
+      .limit(1)
       .maybeSingle();
 
     if (puLookupError) {
@@ -160,10 +164,13 @@ export async function POST(request) {
         lga,
         ward,
         polling_unit,
+        // Store the canonical code from the matched DB row, not the raw
+        // client value, so it's trustworthy even if the client is stale.
+        polling_unit_code: puRow.pu_code,
         profile_image_url: profile_image_url || null,
       })
       .select(
-        "id, full_name, membership_number, lga, ward, polling_unit, gender, profile_image_url",
+        "id, full_name, membership_number, lga, ward, polling_unit, polling_unit_code, gender, profile_image_url",
       )
       .single();
 
