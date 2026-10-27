@@ -23,6 +23,11 @@ import {
   prefetchPollingUnits,
 } from "@/hooks/use-pu";
 import MembershipCardDownload from "@/components/common/membership-card-download";
+import {
+  normalizeNigerianPhone,
+  sanitizePhoneInput,
+  PHONE_ERROR,
+} from "@/lib/phone";
 
 const GENDERS = [
   { value: "male", label: "Male" },
@@ -339,7 +344,9 @@ export default function AddMemberPage() {
     if (!form.gender) e.gender = "Gender is required";
     if (!form.address.trim()) e.address = "Address is required";
     if (!form.phone.trim()) e.phone = "Phone number is required";
+    else if (!normalizeNigerianPhone(form.phone)) e.phone = PHONE_ERROR;
     if (!form.whatsapp.trim()) e.whatsapp = "WhatsApp number is required";
+    else if (!normalizeNigerianPhone(form.whatsapp)) e.whatsapp = PHONE_ERROR;
     if (!form.lga) e.lga = "LGA is required";
     if (!form.ward) e.ward = "Ward is required";
     if (!pollingUnitId) e.polling_unit = "Polling unit is required";
@@ -356,13 +363,18 @@ export default function AddMemberPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/register-member", {
+      const res = await fetch("/api/admin/register-member", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, profile_image_url: profileImageUrl }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (res.status === 409 && data.duplicate && data.data) {
+        // Same phone + name already on record — show the existing member.
+        // (No data means it's outside this admin's LGA; falls through to
+        // the error message below.)
+        setSuccess({ ...data.data, alreadyRegistered: true });
+      } else if (!res.ok) {
         setErrors({ _form: data.error || "Failed to register member." });
       } else {
         setSuccess(data.data);
@@ -419,10 +431,14 @@ export default function AddMemberPage() {
             <CheckCircle size={28} className="text-primary-green" />
           </div>
           <h2 className="text-xl font-extrabold font-primary text-text-dark mb-1">
-            Member Registered
+            {success.alreadyRegistered
+              ? "Already Registered"
+              : "Member Registered"}
           </h2>
           <p className="text-text-gray text-sm mb-4">
-            {success.full_name} has been successfully registered.
+            {success.alreadyRegistered
+              ? `${success.full_name} is already a registered member.`
+              : `${success.full_name} has been successfully registered.`}
           </p>
           <div className="inline-block px-4 py-2 bg-light-green/50 rounded-lg mb-4">
             <span className="text-xs font-medium text-text-gray">
@@ -535,7 +551,6 @@ export default function AddMemberPage() {
                   ))}
                 </SelectEl>
               </Field>
-
             </div>
           </Section>
 
@@ -566,9 +581,12 @@ export default function AddMemberPage() {
               <Field label="Phone Number" required error={errors.phone}>
                 <Input
                   type="tel"
+                  inputMode="numeric"
                   value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
-                  placeholder="+234 800 000 0000"
+                  onChange={(e) =>
+                    set("phone", sanitizePhoneInput(e.target.value))
+                  }
+                  placeholder="080XXXXXXXX"
                   error={errors.phone}
                 />
               </Field>
@@ -576,9 +594,12 @@ export default function AddMemberPage() {
               <Field label="WhatsApp Number" required error={errors.whatsapp}>
                 <Input
                   type="tel"
+                  inputMode="numeric"
                   value={form.whatsapp}
-                  onChange={(e) => set("whatsapp", e.target.value)}
-                  placeholder="+234 800 000 0000"
+                  onChange={(e) =>
+                    set("whatsapp", sanitizePhoneInput(e.target.value))
+                  }
+                  placeholder="080XXXXXXXX"
                   error={errors.whatsapp}
                 />
               </Field>
