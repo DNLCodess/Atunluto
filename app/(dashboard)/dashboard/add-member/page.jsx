@@ -369,8 +369,10 @@ export default function AddMemberPage() {
         body: JSON.stringify({ ...form, profile_image_url: profileImageUrl }),
       });
       const data = await res.json();
-      if (res.status === 409 && data.duplicate) {
+      if (res.status === 409 && data.duplicate && data.data) {
         // Same phone + name already on record — show the existing member.
+        // (No data means it's outside this admin's LGA; falls through to
+        // the error message below.)
         setSuccess({ ...data.data, alreadyRegistered: true });
       } else if (!res.ok) {
         setErrors({ _form: data.error || "Failed to register member." });

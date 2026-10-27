@@ -191,6 +191,18 @@ export async function POST(request) {
     }
 
     if (existing) {
+      // The lookup spans all LGAs so a person can't be registered twice, but
+      // LGA-scoped admins only get the record back if it's in their own LGA.
+      if (actor.role !== "state_admin" && existing.lga !== actor.lga) {
+        return Response.json(
+          {
+            error:
+              "This person is already registered in another LGA. Please contact the state admin.",
+            duplicate: true,
+          },
+          { status: 409 },
+        );
+      }
       return Response.json(
         {
           error: `${existing.full_name} is already registered (Membership No. ${existing.membership_number}).`,
