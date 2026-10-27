@@ -51,3 +51,5 @@ scripts/purge-supabase-storage.mjs
 supabase/cms-schema.sql
 .claude/
 app/dev-tools/
+# member data backups (contain personal data)
+backups/

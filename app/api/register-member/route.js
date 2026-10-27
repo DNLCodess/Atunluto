@@ -1,5 +1,10 @@
 // app/api/register-member/route.js
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import {
+  findDuplicateMember,
+  MEMBER_RETURN_COLUMNS,
+} from "@/lib/member-duplicates";
+import { normalizeNigerianPhone, PHONE_ERROR } from "@/lib/phone";
 
 const serviceClient = createAdminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -59,6 +64,22 @@ export async function POST(request) {
       return Response.json({ error: "Invalid gender value." }, { status: 400 });
     }
 
+    // ── Phone format — stored canonically as 0XXXXXXXXXX ─────────────────────
+    const phoneNumber = normalizeNigerianPhone(phone);
+    const whatsappNumber = normalizeNigerianPhone(whatsapp);
+    if (!phoneNumber) {
+      return Response.json(
+        { error: `Phone: ${PHONE_ERROR}.` },
+        { status: 400 },
+      );
+    }
+    if (!whatsappNumber) {
+      return Response.json(
+        { error: `WhatsApp: ${PHONE_ERROR}.` },
+        { status: 400 },
+      );
+    }
+
     // ── Validate LGA + ward + polling unit exist in oyo_south_polling_units ──
     // Some polling units share the same pu_name within a ward, so the client
     // sends pu_code too (pu_code is unique within a ward) — prefer that for
@@ -70,7 +91,10 @@ export async function POST(request) {
       .select("id, pu_code, pu_name")
       .eq("lga", lga)
       .eq("ward_name", ward)
-      .eq(polling_unit_code ? "pu_code" : "pu_name", polling_unit_code || polling_unit)
+      .eq(
+        polling_unit_code ? "pu_code" : "pu_name",
+        polling_unit_code || polling_unit,
+      )
       .limit(1)
       .maybeSingle();
 
@@ -112,6 +136,35 @@ export async function POST(request) {
       );
     }
 
+    // ── Duplicate check ──────────────────────────────────────────────────────
+    // Same phone AND same name as an existing member → refuse instead of
+    // creating a second record (e.g. a double-tapped submit). This endpoint is
+    // unauthenticated, so the existing record is deliberately NOT returned —
+    // otherwise anyone with a name + phone could pull a member's details/card.
+    const { data: existing, error: dupLookupError } = await findDuplicateMember(
+      serviceClient,
+      { phone: phoneNumber, full_name },
+    );
+
+    if (dupLookupError) {
+      console.error("Duplicate check query error:", dupLookupError);
+      return Response.json(
+        { error: "Could not verify registration. Please try again." },
+        { status: 500 },
+      );
+    }
+
+    if (existing) {
+      return Response.json(
+        {
+          error:
+            "This person is already registered. Please contact your ward coordinator if you need your membership card.",
+          duplicate: true,
+        },
+        { status: 409 },
+      );
+    }
+
     // ── Insert member ────────────────────────────────────────────────────────
     const { data, error } = await serviceClient
       .from("members")
@@ -120,8 +173,8 @@ export async function POST(request) {
         date_of_birth,
         gender,
         address: address.trim(),
-        phone: phone.trim(),
-        whatsapp: whatsapp.trim(),
+        phone: phoneNumber,
+        whatsapp: whatsappNumber,
         messenger: messenger?.trim() || null,
         lga,
         ward,
@@ -131,9 +184,7 @@ export async function POST(request) {
         polling_unit_code: puRow.pu_code,
         profile_image_url: profile_image_url || null,
       })
-      .select(
-        "id, full_name, membership_number, lga, ward, polling_unit, polling_unit_code, gender, profile_image_url",
-      )
+      .select(MEMBER_RETURN_COLUMNS)
       .single();
 
     if (error) {
